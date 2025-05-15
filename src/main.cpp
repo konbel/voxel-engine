@@ -18,6 +18,10 @@ int main() {
         return 1;
     }
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+
     constexpr int WINDOW_FLAGS = SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN;
     SDL_Window *window = SDL_CreateWindow("Voxel Engine", WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
     if (window == nullptr) {
@@ -43,10 +47,6 @@ int main() {
         SDL_Quit();
         return 1;
     }
-
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 
     ImGui::CreateContext();
     ImGui_ImplSDL3_InitForOpenGL(window, glContext);

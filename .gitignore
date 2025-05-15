@@ -1,4 +1,12 @@
-﻿cmake-build-debug
+﻿# CMake
+cmake-build-debug
 cmake-build-release
+
+# JetBrains Clion
 .idea
+
+# MacOS
 .DS_Store
+
+# Package Config
+*.pc
