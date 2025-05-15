@@ -20,7 +20,7 @@ add_subdirectory(src/vendor/glew-2.1.0/build/cmake)
 add_subdirectory(src/vendor/imgui-1.91.9b)
 
 add_executable(voxel_engine
-    main.cpp
+    src/main.cpp
 
     src/vendor/stb-image/stb_image.cpp
 )
