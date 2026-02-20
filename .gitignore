@@ -1,0 +1,49 @@
+# IDEs and Editors
+.idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+
+# Build directories
+bin/
+obj/
+lib/
+Debug/
+Release/
+x64/
+x86/
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+
+# Documentation builds
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Doxygen
+html/
+latex/
