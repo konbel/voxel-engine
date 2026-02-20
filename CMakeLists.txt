@@ -12,6 +12,7 @@ option(ENABLE_CPP20_MODULE "Enable C++ 20 module support for Vulkan" OFF)
 # External Dependencies
 # ================================================================================
 find_package(Vulkan REQUIRED)
+find_package(slang CONFIG HINTS "$ENV{VULKAN_SDK}/lib/cmake")
 
 include(FetchContent)
 
@@ -95,6 +96,29 @@ else()
 endif()
 
 # ================================================================================
+# Shader Compilation
+# ================================================================================
+set(SHADERS_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+set(SHADERS_OUT_DIR ${CMAKE_BINARY_DIR}/shaders)
+
+file(GLOB SLANG_SHADER_SOURCES ${SHADERS_SRC_DIR}/*.slang)
+
+set(SLANG_SPV_OUTPUTS)
+foreach(SHADER_SOURCE ${SLANG_SHADER_SOURCES})
+    get_filename_component(SHADER_NAME ${SHADER_SOURCE} NAME_WE)
+    set(SPV_OUTPUT ${SHADERS_OUT_DIR}/${SHADER_NAME}.spv)
+    add_custom_command(
+        OUTPUT ${SPV_OUTPUT}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_OUT_DIR}
+        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUTPUT}
+        DEPENDS ${SHADER_SOURCE}
+        COMMENT "Compiling Slang shader: ${SHADER_NAME}.slang -> ${SHADER_NAME}.spv"
+        VERBATIM
+    )
+    list(APPEND SLANG_SPV_OUTPUTS ${SPV_OUTPUT})
+endforeach()
+
+# ================================================================================
 # Target Configuration
 # ================================================================================
 file(GLOB_RECURSE SOURCES "src/*.cpp")
@@ -106,8 +130,14 @@ if(ENABLE_CPP20_MODULE)
     )
 endif()
 
+target_include_directories(voxel_engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
 target_link_libraries(voxel_engine PRIVATE
     glm::glm
     glfw
     Vulkan::cppm
 )
+
+add_custom_target(voxel_engine_shaders DEPENDS ${SLANG_SPV_OUTPUTS})
+add_dependencies(voxel_engine voxel_engine_shaders)
+target_compile_definitions(voxel_engine PRIVATE SHADERS_DIR="${SHADERS_OUT_DIR}")
