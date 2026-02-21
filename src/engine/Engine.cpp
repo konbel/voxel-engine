@@ -2,10 +2,10 @@
 
 #include <GLFW/glfw3.h>
 
-////////////////////////////////////////////////////////////////////////////////
-void Engine::CreateWindow() {
-    glfwInit();
+#include "utility/logging/Log.h"
 
+////////////////////////////////////////////////////////////////////////////////
+bool Engine::CreateWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -13,8 +13,10 @@ void Engine::CreateWindow() {
     window = glfwCreateWindow(800, 600, "Voxel Engine", nullptr, nullptr);
 
     if (!window) {
-        throw std::runtime_error("Failed to create GLFW window");
+        Log::Error("Failed to create GLFW window");
+        return false;
     }
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -32,21 +34,29 @@ Engine::~Engine() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Engine::Initialize(const std::string &shaderPath) {
+bool Engine::Initialize(const std::string &shaderPath) {
     if (initialized) {
-        return;
+        Log::Warning("Engine was already initialized");
+        return true;
     }
 
-    CreateWindow();
-    renderer.Initialize(&window, shaderPath);
-    glfwShowWindow(window);
+    glfwInit();
+    if (CreateWindow()) {
+        renderer.Initialize(&window, shaderPath);
+        glfwShowWindow(window);
+        initialized = true;
+        return true;
+    }
 
-    initialized = true;
+    glfwTerminate();
+    Log::Error("Failed to initialize engine");
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::Cleanup() {
     if (!initialized) {
+        Log::Warning("Engine was not initialized");
         return;
     }
 
@@ -59,7 +69,8 @@ void Engine::Cleanup() {
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::Run() const {
     if (!initialized) {
-        throw std::runtime_error("Engine is not initialized");
+        Log::Error("Engine is not initialized");
+        return;
     }
 
     MainLoop();

@@ -53,16 +53,16 @@ private:
     };
 
     // initialization
-    void CreateInstance();
-    void CreateSurface();
-    void PickPhysicalDevice();
-    void CreateLogicalDevice();
-    void CreateSwapChain();
-    void CreateImageViews();
-    void CreateGraphicsPipeline();
-    void CreateCommandPool();
-    void CreateCommandBuffer();
-    void CreateSyncObjects();
+    bool CreateInstance();
+    bool CreateSurface();
+    bool PickPhysicalDevice();
+    bool CreateLogicalDevice();
+    bool CreateSwapChain();
+    bool CreateImageViews();
+    bool CreateGraphicsPipeline();
+    bool CreateCommandPool();
+    bool CreateCommandBuffer();
+    bool CreateSyncObjects();
 
     // helper functions
     static std::vector<const char *> GetRequiredExtensions();
@@ -78,7 +78,7 @@ private:
                                vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask) const;
 
 public:
-    void Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory);
+    bool Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory);
     void DrawFrame() const;
 
     const vk::raii::Device *GetDevice() const;

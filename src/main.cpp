@@ -4,14 +4,10 @@
 #include "engine/utility/files/Files.h"
 
 int main() {
-    try {
-        Engine engine;
-        engine.Initialize(SHADERS_DIR);
-        engine.Run();
-    } catch (const std::exception &e) {
-        std::cerr << e.what() << std::endl;
+    Engine engine;
+    if (!engine.Initialize(SHADERS_DIR)) {
         return EXIT_FAILURE;
     }
-
+    engine.Run();
     return EXIT_SUCCESS;
 }

@@ -3,6 +3,8 @@
 #include <iostream>
 #include <map>
 
+#include "engine/utility/logging/Log.h"
+
 #if !defined(__INTELLISENSE__) && defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_core.h>
 #endif
@@ -16,7 +18,7 @@ constexpr bool enableValidationLayers = true;
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateInstance() {
+bool Renderer::CreateInstance() {
     // setup validation layers
     std::vector<char const *> requiredLayers;
     if (enableValidationLayers) {
@@ -35,7 +37,8 @@ void Renderer::CreateInstance() {
                                                                  });
                                                          });
     if (unsupportedLayerIt != requiredLayers.end()) {
-        throw std::runtime_error("Validation layer not supported: " + std::string(*unsupportedLayerIt));
+        Log::Error(("Validation layer not supported: " + std::string(*unsupportedLayerIt)).c_str());
+        return false;
     }
 
     // setup required extensions
@@ -55,7 +58,8 @@ void Renderer::CreateInstance() {
                                                                     });
                                                             });
     if (unsupportedPropertyIt != requiredExtensions.end()) {
-        throw std::runtime_error("Required extension not supported: " + std::string(*unsupportedPropertyIt));
+        Log::Error(("Required extension not supported: " + std::string(*unsupportedPropertyIt)).c_str());
+        return false;
     }
 
     // create vulkan instance
@@ -65,7 +69,7 @@ void Renderer::CreateInstance() {
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion = vk::ApiVersion13,
+            .apiVersion = vk::ApiVersion14,
         };
 
         const vk::InstanceCreateInfo createInfo{
@@ -78,27 +82,34 @@ void Renderer::CreateInstance() {
         };
 
         instance = vk::raii::Instance(context, createInfo);
+        Log::Debug("Vulkan instance created");
+        return true;
     } catch (const vk::SystemError &e) {
-        std::cerr << "Vulkan Error: " << e.what() << std::endl;
+        Log::Error((std::string("Vulkan Error: ") + std::string(e.what())).c_str());
     } catch (const std::exception &e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        Log::Error((std::string("Error: ") + std::string(e.what())).c_str());
     }
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateSurface() {
+bool Renderer::CreateSurface() {
     VkSurfaceKHR _surface;
     if (glfwCreateWindowSurface(*instance, *window, nullptr, &_surface) != 0) {
-        throw std::runtime_error("Failed to create window surface!");
+        Log::Error("Failed to create window surface!");
+        return false;
     }
     surface = vk::raii::SurfaceKHR(instance, _surface);
+    Log::Debug("Surface created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::PickPhysicalDevice() {
+bool Renderer::PickPhysicalDevice() {
     const auto devices = instance.enumeratePhysicalDevices();
     if (devices.empty()) {
-        throw std::runtime_error("Failed to find a GPU with Vulkan support!");
+        Log::Error("Failed to find a GPU with Vulkan support!");
+        return false;
     }
 
     std::multimap<int, vk::raii::PhysicalDevice> candidates;
@@ -146,15 +157,18 @@ void Renderer::PickPhysicalDevice() {
     }
 
     if (candidates.empty()) {
-        throw std::runtime_error("Failed to find a suitable GPU!");
+        Log::Error("Failed to find a suitable GPU!");
+        return false;
     }
 
     physicalDevice = candidates.rbegin()->second;
-    std::cout << "Selected rendering device: " << physicalDevice.getProperties().deviceName << std::endl;
+    Log::Info((std::string("Selected rendering device: ") +
+        std::string(physicalDevice.getProperties().deviceName)).c_str());
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateLogicalDevice() {
+bool Renderer::CreateLogicalDevice() {
     const auto queueFamilies = physicalDevice.getQueueFamilyProperties();
 
     // get first index to queue family which supports graphics
@@ -166,7 +180,8 @@ void Renderer::CreateLogicalDevice() {
         }
     }
     if (graphicsIndex == -1) {
-        throw std::runtime_error("Failed to find a graphics and present queue family!");
+        Log::Error("Failed to find a graphics queue family!");
+        return false;
     }
 
     // check if graphics index is good enough
@@ -191,6 +206,10 @@ void Renderer::CreateLogicalDevice() {
                 }
             }
         }
+    }
+    if (presentIndex == -1) {
+        Log::Error("Failed to find a present queue family!");
+        return false;
     }
 
     graphicsFamily = graphicsIndex;
@@ -230,10 +249,12 @@ void Renderer::CreateLogicalDevice() {
     device = vk::raii::Device(physicalDevice, deviceCreateInfo);
     graphicsQueue = vk::raii::Queue(device, graphicsIndex, 0);
     presentQueue = vk::raii::Queue(device, presentIndex, 0);
+    Log::Debug("Logical device created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateSwapChain() {
+bool Renderer::CreateSwapChain() {
     const vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
 
     const vk::SurfaceFormatKHR swapChainSurfaceFormat = ChooseSwapSurfaceFormat(
@@ -280,10 +301,12 @@ void Renderer::CreateSwapChain() {
 
     swapChain = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
     swapChainImages = swapChain.getImages();
+    Log::Debug("Swap chain created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateImageViews() {
+bool Renderer::CreateImageViews() {
     swapChainImageViews.clear();
 
     vk::ImageViewCreateInfo imageViewCreateInfo{
@@ -296,10 +319,13 @@ void Renderer::CreateImageViews() {
         imageViewCreateInfo.image = image;
         swapChainImageViews.emplace_back(device, imageViewCreateInfo);
     }
+
+    Log::Debug("Image views created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateGraphicsPipeline() {
+bool Renderer::CreateGraphicsPipeline() {
     const vk::raii::ShaderModule shaderModule = CreateShaderModule(ReadFile(shaderPath + "/shader.spv"));
 
     const vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
@@ -393,20 +419,24 @@ void Renderer::CreateGraphicsPipeline() {
     };
 
     graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfo);
+    Log::Debug("Graphics pipeline created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateCommandPool() {
+bool Renderer::CreateCommandPool() {
     const vk::CommandPoolCreateInfo poolCreateInfo{
         .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         .queueFamilyIndex = graphicsFamily,
     };
 
     commandPool = vk::raii::CommandPool(device, poolCreateInfo);
+    Log::Debug("Command pool created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateCommandBuffer() {
+bool Renderer::CreateCommandBuffer() {
     const vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
         .commandPool = *commandPool,
         .level = vk::CommandBufferLevel::ePrimary,
@@ -414,12 +444,17 @@ void Renderer::CreateCommandBuffer() {
     };
 
     commandBuffer = std::move(vk::raii::CommandBuffers(device, commandBufferAllocateInfo).front());
+    Log::Debug("Command buffer created");
+    return true;
 }
 
-void Renderer::CreateSyncObjects() {
+bool Renderer::CreateSyncObjects() {
     presentCompleteSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
     renderFinishedSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
     drawFence = vk::raii::Fence(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+
+    Log::Debug("Synchronization objects created");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -444,6 +479,7 @@ vk::SurfaceFormatKHR Renderer::ChooseSwapSurfaceFormat(const std::vector<vk::Sur
         }
     }
 
+    Log::Warning("Desired surface format not found");
     return availableFormats[0];
 }
 
@@ -455,6 +491,7 @@ vk::PresentModeKHR Renderer::ChooseSwapPresentMode(const std::vector<vk::Present
         }
     }
 
+    Log::Warning("Desired present mode not found");
     return vk::PresentModeKHR::eFifo;
 }
 
@@ -583,7 +620,7 @@ void Renderer::TransitionImageLayout(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory) {
+bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory) {
     window = glfwWindow;
     shaderPath = shaderDirectory;
 
@@ -591,16 +628,31 @@ void Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
         throw std::runtime_error("Invalid window pointer provided to renderer!");
     }
 
-    CreateInstance();
-    CreateSurface();
-    PickPhysicalDevice();
-    CreateLogicalDevice();
+    if (!CreateInstance()) {
+        return false;
+    }
+
+    if (!CreateSurface()) {
+        return false;
+    }
+
+    if (!PickPhysicalDevice()) {
+        return false;
+    }
+
+    if (!CreateLogicalDevice()) {
+        return false;
+    }
+
     CreateSwapChain();
     CreateImageViews();
     CreateGraphicsPipeline();
     CreateCommandPool();
     CreateCommandBuffer();
     CreateSyncObjects();
+
+    Log::Debug("Renderer initialized successfully");
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -110,7 +110,7 @@ foreach(SHADER_SOURCE ${SLANG_SHADER_SOURCES})
     add_custom_command(
         OUTPUT ${SPV_OUTPUT}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_OUT_DIR}
-        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -target spirv -profile spirv_1_3 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUTPUT}
+        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCE} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUTPUT}
         DEPENDS ${SHADER_SOURCE}
         COMMENT "Compiling Slang shader: ${SHADER_NAME}.slang -> ${SHADER_NAME}.spv"
         VERBATIM

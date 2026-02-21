@@ -12,13 +12,13 @@ private:
     Renderer renderer;
     GLFWwindow *window = nullptr;
 
-    void CreateWindow();
+    bool CreateWindow();
     void MainLoop() const;
 
 public:
     ~Engine();
 
-    void Initialize(const std::string &shaderPath);
+    bool Initialize(const std::string &shaderPath);
     void Cleanup();
     void Run() const;
 };
