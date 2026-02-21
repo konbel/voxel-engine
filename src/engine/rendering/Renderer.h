@@ -1,6 +1,8 @@
 #ifndef VOXEL_ENGINE_RENDERER_H
 #define VOXEL_ENGINE_RENDERER_H
 
+#define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS
+
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
 #else
@@ -46,6 +48,8 @@ private:
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
     std::vector<vk::raii::Fence> inFlightFences;
 
+    bool frameBufferResized = false;
+
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
     };
@@ -79,8 +83,13 @@ private:
                                vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
                                vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask) const;
 
+    void RecreateSwapChain();
+    void CleanupSwapChain();
+    static void OnFramebufferResized(GLFWwindow *window, int width, int height);
+
 public:
     bool Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory);
+    void Cleanup();
     void DrawFrame();
 
     const vk::raii::Device *GetDevice() const;

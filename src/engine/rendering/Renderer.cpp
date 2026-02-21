@@ -625,13 +625,47 @@ void Renderer::TransitionImageLayout(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+void Renderer::RecreateSwapChain() {
+    // wait if window is minimized
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(*window, &width, &height);
+    while (width == 0 || height == 0) {
+        glfwGetWindowSize(*window, &width, &height);
+        glfwWaitEvents();
+    }
+
+    device.waitIdle();
+
+    CleanupSwapChain();
+
+    CreateSwapChain();
+    CreateImageViews();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::CleanupSwapChain() {
+    swapChainImageViews.clear();
+    swapChain = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::OnFramebufferResized(GLFWwindow *window, int width, int height) {
+    const auto renderer = static_cast<Renderer *>(glfwGetWindowUserPointer(window));
+    renderer->frameBufferResized = true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory) {
     window = glfwWindow;
     shaderPath = shaderDirectory;
 
     if (*glfwWindow == nullptr) {
-        throw std::runtime_error("Invalid window pointer provided to renderer!");
+        Log::Error("Invalid window pointer provided to renderer!");
+        return false;
     }
+
+    glfwSetWindowUserPointer(*window, this);
+    glfwSetFramebufferSizeCallback(*window, OnFramebufferResized);
 
     if (!CreateInstance()) {
         return false;
@@ -661,21 +695,30 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::DrawFrame()
-{
+void Renderer::Cleanup() {
+    CleanupSwapChain();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::DrawFrame() {
     const auto fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
     if (fenceResult != vk::Result::eSuccess) {
         Log::Error("Failed to wait for fence");
         return;
     }
-    device.resetFences(*inFlightFences[frameIndex]);
 
     auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
-    if (result != vk::Result::eSuccess) {
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+        RecreateSwapChain();
+        return;
+    }
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
+        assert(result == vk::Result::eTimeout || result == vk::Result::eNotReady);
         Log::Error("Failed to acquire swap chain image");
         return;
     }
 
+    device.resetFences(*inFlightFences[frameIndex]);
     commandBuffers[frameIndex].reset();
     RecordCommandBuffer(imageIndex);
 
@@ -700,9 +743,13 @@ void Renderer::DrawFrame()
         .pResults = nullptr,
     };
     result = presentQueue.presentKHR(presentInfoKHR);
-    if (result != vk::Result::eSuccess) {
+    if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR || frameBufferResized) {
+        frameBufferResized = false;
+        RecreateSwapChain();
+    } else if (result != vk::Result::eSuccess) {
         Log::Error("Failed to present swap chain image");
     }
+
 
     frameIndex = (frameIndex + 1) % MAX_IN_FLIGHT_FRAMES;
 }

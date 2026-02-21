@@ -7,7 +7,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 bool Engine::CreateWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     window = glfwCreateWindow(800, 600, "Voxel Engine", nullptr, nullptr);
@@ -59,6 +58,8 @@ void Engine::Cleanup() {
         Log::Warning("Engine was not initialized");
         return;
     }
+
+    renderer.Cleanup();
 
     glfwDestroyWindow(window);
     glfwTerminate();
