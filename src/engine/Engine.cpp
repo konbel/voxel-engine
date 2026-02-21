@@ -20,7 +20,7 @@ bool Engine::CreateWindow() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Engine::MainLoop() const {
+void Engine::MainLoop() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         renderer.DrawFrame();
@@ -67,7 +67,7 @@ void Engine::Cleanup() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Engine::Run() const {
+void Engine::Run() {
     if (!initialized) {
         Log::Error("Engine is not initialized");
         return;

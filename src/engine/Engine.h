@@ -13,14 +13,14 @@ private:
     GLFWwindow *window = nullptr;
 
     bool CreateWindow();
-    void MainLoop() const;
+    void MainLoop();
 
 public:
     ~Engine();
 
     bool Initialize(const std::string &shaderPath);
     void Cleanup();
-    void Run() const;
+    void Run();
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H

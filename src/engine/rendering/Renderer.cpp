@@ -440,18 +440,23 @@ bool Renderer::CreateCommandBuffer() {
     const vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
         .commandPool = *commandPool,
         .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1,
+        .commandBufferCount = MAX_IN_FLIGHT_FRAMES,
     };
 
-    commandBuffer = std::move(vk::raii::CommandBuffers(device, commandBufferAllocateInfo).front());
-    Log::Debug("Command buffer created");
+    commandBuffers = vk::raii::CommandBuffers(device, commandBufferAllocateInfo);
+    Log::Debug("Command buffers created");
     return true;
 }
 
 bool Renderer::CreateSyncObjects() {
-    presentCompleteSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
-    renderFinishedSemaphore = vk::raii::Semaphore(device, vk::SemaphoreCreateInfo());
-    drawFence = vk::raii::Fence(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+    for (size_t i = 0; i < swapChainImages.size(); ++i) {
+        renderFinishedSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
+    }
+
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        presentCompleteSemaphores.emplace_back(device, vk::SemaphoreCreateInfo());
+        inFlightFences.emplace_back(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
+    }
 
     Log::Debug("Synchronization objects created");
     return true;
@@ -522,7 +527,7 @@ vk::Extent2D Renderer::ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabi
 
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
-    commandBuffer.begin({});
+    commandBuffers[frameIndex].begin({});
 
     // transition swap chain image to color attachment optimal layout
     TransitionImageLayout(
@@ -555,17 +560,17 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
         .pColorAttachments = &attachmentInfo,
     };
 
-    commandBuffer.beginRendering(renderingInfo);
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-    commandBuffer.setViewport(0, vk::Viewport{
+    commandBuffers[frameIndex].beginRendering(renderingInfo);
+    commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+    commandBuffers[frameIndex].setViewport(0, vk::Viewport{
                                   0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
                                   static_cast<float>(swapChainExtent.height), 0.0f, 1.0f
                               });
-    commandBuffer.setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
+    commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
-    commandBuffer.draw(3, 1, 0, 0);
+    commandBuffers[frameIndex].draw(3, 1, 0, 0);
 
-    commandBuffer.endRendering();
+    commandBuffers[frameIndex].endRendering();
 
     // transition swap chain image to present
     TransitionImageLayout(
@@ -578,7 +583,7 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
         vk::PipelineStageFlagBits2::eBottomOfPipe
     );
 
-    commandBuffer.end();
+    commandBuffers[frameIndex].end();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -616,7 +621,7 @@ void Renderer::TransitionImageLayout(
         .pImageMemoryBarriers = &barrier,
     };
 
-    commandBuffer.pipelineBarrier2(dependencyInfo);
+    commandBuffers[frameIndex].pipelineBarrier2(dependencyInfo);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -656,35 +661,50 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::DrawFrame() const {
-    auto fenceResult = device.waitForFences(*drawFence, vk::True, UINT64_MAX);
+void Renderer::DrawFrame()
+{
+    const auto fenceResult = device.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
+    if (fenceResult != vk::Result::eSuccess) {
+        Log::Error("Failed to wait for fence");
+        return;
+    }
+    device.resetFences(*inFlightFences[frameIndex]);
 
-    auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphore, nullptr);
+    auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
+    if (result != vk::Result::eSuccess) {
+        Log::Error("Failed to acquire swap chain image");
+        return;
+    }
+
+    commandBuffers[frameIndex].reset();
     RecordCommandBuffer(imageIndex);
-    device.resetFences(*drawFence);
 
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     const vk::SubmitInfo submitInfo{
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &*presentCompleteSemaphore,
+        .pWaitSemaphores = &*presentCompleteSemaphores[frameIndex],
         .pWaitDstStageMask = &waitDestinationStageMask,
         .commandBufferCount = 1,
-        .pCommandBuffers = &*commandBuffer,
+        .pCommandBuffers = &*commandBuffers[frameIndex],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &*renderFinishedSemaphore,
+        .pSignalSemaphores = &*renderFinishedSemaphores[imageIndex],
     };
-    graphicsQueue.submit(submitInfo, *drawFence);
-    result = device.waitForFences(*drawFence, vk::True, UINT64_MAX);
+    graphicsQueue.submit(submitInfo, *inFlightFences[frameIndex]);
 
     const vk::PresentInfoKHR presentInfoKHR{
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &*renderFinishedSemaphore,
+        .pWaitSemaphores = &*renderFinishedSemaphores[imageIndex],
         .swapchainCount = 1,
         .pSwapchains = &*swapChain,
         .pImageIndices = &imageIndex,
         .pResults = nullptr,
     };
     result = presentQueue.presentKHR(presentInfoKHR);
+    if (result != vk::Result::eSuccess) {
+        Log::Error("Failed to present swap chain image");
+    }
+
+    frameIndex = (frameIndex + 1) % MAX_IN_FLIGHT_FRAMES;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

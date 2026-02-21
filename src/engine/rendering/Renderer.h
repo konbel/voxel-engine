@@ -38,11 +38,13 @@ private:
     vk::raii::Pipeline graphicsPipeline = nullptr;
 
     vk::raii::CommandPool commandPool = nullptr;
-    vk::raii::CommandBuffer commandBuffer = nullptr;
+    std::vector<vk::raii::CommandBuffer> commandBuffers;
 
-    vk::raii::Semaphore presentCompleteSemaphore = nullptr;
-    vk::raii::Semaphore renderFinishedSemaphore = nullptr;
-    vk::raii::Fence drawFence = nullptr;
+    static constexpr size_t MAX_IN_FLIGHT_FRAMES = 2;
+    size_t frameIndex = 0;
+    std::vector<vk::raii::Semaphore> presentCompleteSemaphores;
+    std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
+    std::vector<vk::raii::Fence> inFlightFences;
 
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -79,7 +81,7 @@ private:
 
 public:
     bool Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory);
-    void DrawFrame() const;
+    void DrawFrame();
 
     const vk::raii::Device *GetDevice() const;
 };
