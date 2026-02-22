@@ -47,8 +47,10 @@ private:
     std::vector<vk::raii::Semaphore> presentCompleteSemaphores;
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
     std::vector<vk::raii::Fence> inFlightFences;
-
     bool frameBufferResized = false;
+
+    vk::raii::Buffer vertexBuffer = nullptr;
+    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
 
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -67,7 +69,8 @@ private:
     bool CreateImageViews();
     bool CreateGraphicsPipeline();
     bool CreateCommandPool();
-    bool CreateCommandBuffer();
+    bool CreateVertexBuffer();
+    bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
     // helper functions
@@ -76,6 +79,7 @@ private:
     static vk::PresentModeKHR ChooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
     vk::Extent2D ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities) const;
     vk::raii::ShaderModule CreateShaderModule(const std::vector<char> &code) const;
+    uint32_t FindMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) const;
 
     // drawing
     void RecordCommandBuffer(uint32_t imageIndex) const;

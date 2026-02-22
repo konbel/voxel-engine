@@ -3,19 +3,31 @@
 #include <iostream>
 #include <map>
 
+#include "Vertex.h"
+#include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 
 #if !defined(__INTELLISENSE__) && defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_core.h>
 #endif
 
-#include "../utility/files/Files.h"
-
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
 #else
 constexpr bool enableValidationLayers = true;
 #endif
+
+// const std::vector<Vertex> vertices = {
+//     {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+//     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+// };
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateInstance() {
@@ -352,7 +364,14 @@ bool Renderer::CreateGraphicsPipeline() {
         .pDynamicStates = dynamicStates.data(),
     };
 
-    vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo;
+    auto bindingDescription = Vertex::GetBindingDescription();
+    auto attributeDescriptions = Vertex::GetAttributeDescriptions();
+    vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindingDescription,
+        .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+        .pVertexAttributeDescriptions = attributeDescriptions.data(),
+    };
 
     vk::PipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo{
         .topology = vk::PrimitiveTopology::eTriangleList,
@@ -436,7 +455,38 @@ bool Renderer::CreateCommandPool() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool Renderer::CreateCommandBuffer() {
+bool Renderer::CreateVertexBuffer() {
+    const vk::BufferCreateInfo bufferCreateInfo{
+        .size = sizeof(vertices[0]) * vertices.size(),
+        .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+        .sharingMode = vk::SharingMode::eExclusive,
+    };
+    vertexBuffer = vk::raii::Buffer(device, bufferCreateInfo);
+
+    const vk::MemoryRequirements memoryRequirements = vertexBuffer.getMemoryRequirements();
+    const vk::MemoryAllocateInfo memoryAllocateInfo{
+        .allocationSize = memoryRequirements.size,
+        .memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent),
+    };
+    vertexBufferMemory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
+    if (vertexBufferMemory == nullptr) {
+        Log::Error("Failed to allocate vertex buffer memory");
+        return false;
+    }
+
+    vertexBuffer.bindMemory(*vertexBufferMemory, 0);
+
+    void *data = vertexBufferMemory.mapMemory(0, bufferCreateInfo.size);
+    memcpy(data, vertices.data(), bufferCreateInfo.size);
+    vertexBufferMemory.unmapMemory();
+
+    Log::Debug("Vertex buffer created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateCommandBuffers() {
     const vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
         .commandPool = *commandPool,
         .level = vk::CommandBufferLevel::ePrimary,
@@ -526,6 +576,19 @@ vk::Extent2D Renderer::ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabi
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+uint32_t Renderer::FindMemoryType(const uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) const {
+    const vk::PhysicalDeviceMemoryProperties memoryProperties = physicalDevice.getMemoryProperties();
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+        if ((typeFilter & (1 << i)) && (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    Log::Error("Failed to find suitable memory type");
+    return -1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
     commandBuffers[frameIndex].begin({});
 
@@ -568,6 +631,7 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
                               });
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
+    commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
     commandBuffers[frameIndex].draw(3, 1, 0, 0);
 
     commandBuffers[frameIndex].endRendering();
@@ -687,7 +751,12 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     CreateImageViews();
     CreateGraphicsPipeline();
     CreateCommandPool();
-    CreateCommandBuffer();
+
+    if (!CreateVertexBuffer()) {
+        return false;
+    }
+
+    CreateCommandBuffers();
     CreateSyncObjects();
 
     Log::Debug("Renderer initialized successfully");
