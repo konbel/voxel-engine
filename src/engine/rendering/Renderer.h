@@ -51,6 +51,8 @@ private:
 
     vk::raii::Buffer vertexBuffer = nullptr;
     vk::raii::DeviceMemory vertexBufferMemory = nullptr;
+    vk::raii::Buffer indexBuffer = nullptr;
+    vk::raii::DeviceMemory indexBufferMemory = nullptr;
 
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -70,6 +72,7 @@ private:
     bool CreateGraphicsPipeline();
     bool CreateCommandPool();
     bool CreateVertexBuffer();
+    bool CreateIndexBuffer();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
@@ -80,7 +83,7 @@ private:
     vk::Extent2D ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities) const;
     vk::raii::ShaderModule CreateShaderModule(const std::vector<char> &code) const;
     uint32_t FindMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) const;
-    void CreateBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const;
+    bool CreateBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const;
     void CopyBuffer(vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size) const;
 
     // drawing

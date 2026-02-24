@@ -17,16 +17,15 @@ constexpr bool enableValidationLayers = false;
 constexpr bool enableValidationLayers = true;
 #endif
 
-// const std::vector<Vertex> vertices = {
-//     {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-//     {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-// };
-
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -456,27 +455,65 @@ bool Renderer::CreateCommandPool() {
 
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateVertexBuffer() {
-    const int size = sizeof(vertices[0]) * vertices.size();
+    const vk::DeviceSize size = sizeof(vertices[0]) * vertices.size();
 
     // create staging buffer
     vk::raii::Buffer stagingBuffer = nullptr;
     vk::raii::DeviceMemory stagingBufferMemory = nullptr;
-    CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
+    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-        stagingBuffer, stagingBufferMemory);
+        stagingBuffer, stagingBufferMemory)) {
+        Log::Error("Failed to create staging buffer for vertex buffer");
+        return false;
+    }
 
     void *dataStaging = stagingBufferMemory.mapMemory(0, size);
     memcpy(dataStaging, vertices.data(), size);
     stagingBufferMemory.unmapMemory();
 
     // create device local buffer
-    CreateBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vertexBuffer, vertexBufferMemory);
+        vertexBuffer, vertexBufferMemory)) {
+        Log::Error("Failed to create vertex buffer");
+        return false;
+    }
 
     CopyBuffer(stagingBuffer, vertexBuffer, size);
 
     Log::Debug("Vertex buffer created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateIndexBuffer() {
+    const vk::DeviceSize size = sizeof(indices[0]) * indices.size();
+
+    // create staging buffer
+    vk::raii::Buffer stagingBuffer = nullptr;
+    vk::raii::DeviceMemory stagingBufferMemory = nullptr;
+    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+        stagingBuffer, stagingBufferMemory)) {
+        Log::Error("Failed to create staging buffer for index buffer");
+        return false;
+    }
+
+    void *dataStaging = stagingBufferMemory.mapMemory(0, size);
+    memcpy(dataStaging, indices.data(), size);
+    stagingBufferMemory.unmapMemory();
+
+    // create index buffer
+    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        indexBuffer, indexBufferMemory)) {
+        Log::Error("Failed to create index buffer");
+        return false;
+    }
+
+    CopyBuffer(stagingBuffer, indexBuffer, size);
+
+    Log::Debug("Index buffer created");
     return true;
 }
 
@@ -584,7 +621,7 @@ uint32_t Renderer::FindMemoryType(const uint32_t typeFilter, const vk::MemoryPro
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags usage, const vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const {
+bool Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags usage, const vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const {
     const vk::BufferCreateInfo bufferCreateInfo{
         .size = size,
         .usage = usage,
@@ -600,10 +637,11 @@ void Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlag
     bufferMemory = vk::raii::DeviceMemory(device, memoryAllocateInfo);
     if (bufferMemory == nullptr) {
         Log::Error("Failed to allocate buffer memory");
-        return;
+        return false;
     }
 
     buffer.bindMemory(*bufferMemory, 0);
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -666,7 +704,9 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffers[frameIndex].draw(3, 1, 0, 0);
+    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
+
+    commandBuffers[frameIndex].drawIndexed(indices.size(), 1, 0, 0, 0);
 
     commandBuffers[frameIndex].endRendering();
 
@@ -787,6 +827,10 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     CreateCommandPool();
 
     if (!CreateVertexBuffer()) {
+        return false;
+    }
+
+    if (!CreateIndexBuffer()) {
         return false;
     }
 
