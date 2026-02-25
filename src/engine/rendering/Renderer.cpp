@@ -1,7 +1,13 @@
 #include "Renderer.h"
 
+#include <chrono>
 #include <iostream>
 #include <map>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "Vertex.h"
 #include "engine/utility/files/Files.h"
@@ -11,6 +17,12 @@
 #include <vulkan/vulkan_core.h>
 #endif
 
+struct UniformBufferObject {
+    alignas(16) glm::mat4 model;
+    alignas(16) glm::mat4 view;
+    alignas(16) glm::mat4 proj;
+};
+
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
 #else
@@ -18,10 +30,10 @@ constexpr bool enableValidationLayers = true;
 #endif
 
 const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    {{-0.5f, 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -174,7 +186,7 @@ bool Renderer::PickPhysicalDevice() {
 
     physicalDevice = candidates.rbegin()->second;
     Log::Info((std::string("Selected rendering device: ") +
-        std::string(physicalDevice.getProperties().deviceName)).c_str());
+               std::string(physicalDevice.getProperties().deviceName)).c_str());
     return true;
 }
 
@@ -336,6 +348,25 @@ bool Renderer::CreateImageViews() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateDescriptorSetLayout() {
+    constexpr vk::DescriptorSetLayoutBinding uboLayoutBinding{
+        .binding = 0,
+        .descriptorType = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = 1,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+    };
+
+    const vk::DescriptorSetLayoutCreateInfo layoutCreateInfo{
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding,
+    };
+
+    descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutCreateInfo);
+    Log::Debug("Descriptor set layout created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateGraphicsPipeline() {
     const vk::raii::ShaderModule shaderModule = CreateShaderModule(ReadFile(shaderPath + "/shader.spv"));
 
@@ -409,7 +440,8 @@ bool Renderer::CreateGraphicsPipeline() {
     };
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-        .setLayoutCount = 0,
+        .setLayoutCount = 1,
+        .pSetLayouts = &*descriptorSetLayout,
         .pushConstantRangeCount = 0,
     };
     pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutCreateInfo);
@@ -461,8 +493,8 @@ bool Renderer::CreateVertexBuffer() {
     vk::raii::Buffer stagingBuffer = nullptr;
     vk::raii::DeviceMemory stagingBufferMemory = nullptr;
     if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-        stagingBuffer, stagingBufferMemory)) {
+                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                      stagingBuffer, stagingBufferMemory)) {
         Log::Error("Failed to create staging buffer for vertex buffer");
         return false;
     }
@@ -473,8 +505,8 @@ bool Renderer::CreateVertexBuffer() {
 
     // create device local buffer
     if (!CreateBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal,
-        vertexBuffer, vertexBufferMemory)) {
+                      vk::MemoryPropertyFlagBits::eDeviceLocal,
+                      vertexBuffer, vertexBufferMemory)) {
         Log::Error("Failed to create vertex buffer");
         return false;
     }
@@ -493,8 +525,8 @@ bool Renderer::CreateIndexBuffer() {
     vk::raii::Buffer stagingBuffer = nullptr;
     vk::raii::DeviceMemory stagingBufferMemory = nullptr;
     if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-        stagingBuffer, stagingBufferMemory)) {
+                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                      stagingBuffer, stagingBufferMemory)) {
         Log::Error("Failed to create staging buffer for index buffer");
         return false;
     }
@@ -505,8 +537,8 @@ bool Renderer::CreateIndexBuffer() {
 
     // create index buffer
     if (!CreateBuffer(size, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal,
-        indexBuffer, indexBufferMemory)) {
+                      vk::MemoryPropertyFlagBits::eDeviceLocal,
+                      indexBuffer, indexBufferMemory)) {
         Log::Error("Failed to create index buffer");
         return false;
     }
@@ -514,6 +546,88 @@ bool Renderer::CreateIndexBuffer() {
     CopyBuffer(stagingBuffer, indexBuffer, size);
 
     Log::Debug("Index buffer created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateUniformBuffers() {
+    uniformBuffers.clear();
+    uniformBuffersMemory.clear();
+    uniformBuffersMapped.clear();
+    uniformBuffersMapped.resize(MAX_IN_FLIGHT_FRAMES);
+
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        constexpr vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+        vk::raii::Buffer buffer = nullptr;
+        vk::raii::DeviceMemory memory = nullptr;
+        if (!CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+                          vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                          buffer, memory)) {
+            Log::Error("Failed to create uniform buffer");
+            return false;
+        }
+
+        uniformBuffersMapped[i] = memory.mapMemory(0, bufferSize);
+        uniformBuffers.emplace_back(std::move(buffer));
+        uniformBuffersMemory.emplace_back(std::move(memory));
+    }
+
+    Log::Debug("Uniform buffers created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateDescriptorPool() {
+    constexpr vk::DescriptorPoolSize poolSize{
+        .type = vk::DescriptorType::eUniformBuffer,
+        .descriptorCount = static_cast<uint32_t>(MAX_IN_FLIGHT_FRAMES),
+    };
+
+    const vk::DescriptorPoolCreateInfo poolCreateInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = static_cast<uint32_t>(MAX_IN_FLIGHT_FRAMES),
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize,
+    };
+
+    descriptorPool = vk::raii::DescriptorPool(device, poolCreateInfo);
+    Log::Debug("Descriptor pool created");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateDescriptorSets() {
+    const std::vector<vk::DescriptorSetLayout> layouts(MAX_IN_FLIGHT_FRAMES, *descriptorSetLayout);
+
+    const vk::DescriptorSetAllocateInfo allocateInfo{
+        .descriptorPool = *descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(MAX_IN_FLIGHT_FRAMES),
+        .pSetLayouts = layouts.data(),
+    };
+
+    descriptorSets.clear();
+    descriptorSets = vk::raii::DescriptorSets(device, allocateInfo);
+
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        const vk::DescriptorBufferInfo bufferInfo{
+            .buffer = *uniformBuffers[i],
+            .offset = 0,
+            .range = sizeof(UniformBufferObject),
+        };
+
+        const vk::WriteDescriptorSet descriptorWrite{
+            .dstSet = *descriptorSets[i],
+            .dstBinding = 0,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .pBufferInfo = &bufferInfo,
+        };
+
+        device.updateDescriptorSets(descriptorWrite, nullptr);
+    }
+
+    Log::Debug("Descriptor sets created");
     return true;
 }
 
@@ -621,7 +735,9 @@ uint32_t Renderer::FindMemoryType(const uint32_t typeFilter, const vk::MemoryPro
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags usage, const vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const {
+bool Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlags usage,
+                            const vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer,
+                            vk::raii::DeviceMemory &bufferMemory) const {
     const vk::BufferCreateInfo bufferCreateInfo{
         .size = size,
         .usage = usage,
@@ -645,19 +761,41 @@ bool Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlag
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::CopyBuffer(vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size) const {
-    vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
+void Renderer::CopyBuffer(const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer,
+                          const vk::DeviceSize size) const {
+    const vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
         .commandPool = *commandPool,
         .level = vk::CommandBufferLevel::ePrimary,
         .commandBufferCount = 1,
     };
-    vk::raii::CommandBuffer commandCopyBuffer = std::move(device.allocateCommandBuffers(commandBufferAllocateInfo).front());
+    const vk::raii::CommandBuffer commandCopyBuffer = std::move(
+        device.allocateCommandBuffers(commandBufferAllocateInfo).front());
 
-    commandCopyBuffer.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+    commandCopyBuffer.begin(vk::CommandBufferBeginInfo{.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy{0, 0, size});
     commandCopyBuffer.end();
-    graphicsQueue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer });
+    graphicsQueue.submit(vk::SubmitInfo{.commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer});
     graphicsQueue.waitIdle();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::UpdateUniformBuffer(const uint32_t currentFrame) const {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    const auto currentTime = std::chrono::high_resolution_clock::now();
+    const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo{
+        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
+        .view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                            glm::vec3(0.0f, 1.0f, 0.0f)),
+        .proj = glm::perspective(glm::radians(45.0f),
+                                 static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height),
+                                 0.1f, 10.0f),
+    };
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -698,13 +836,15 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
     commandBuffers[frameIndex].beginRendering(renderingInfo);
     commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
     commandBuffers[frameIndex].setViewport(0, vk::Viewport{
-                                  0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
-                                  static_cast<float>(swapChainExtent.height), 0.0f, 1.0f
-                              });
+                                               0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
+                                               static_cast<float>(swapChainExtent.height), 0.0f, 1.0f
+                                           });
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
     commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
+    commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0,
+                                                  *descriptorSets[frameIndex], nullptr);
 
     commandBuffers[frameIndex].drawIndexed(indices.size(), 1, 0, 0, 0);
 
@@ -823,6 +963,7 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
 
     CreateSwapChain();
     CreateImageViews();
+    CreateDescriptorSetLayout();
     CreateGraphicsPipeline();
     CreateCommandPool();
 
@@ -834,6 +975,9 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
         return false;
     }
 
+    CreateUniformBuffers();
+    CreateDescriptorPool();
+    CreateDescriptorSets();
     CreateCommandBuffers();
     CreateSyncObjects();
 
@@ -866,6 +1010,9 @@ void Renderer::DrawFrame() {
     }
 
     device.resetFences(*inFlightFences[frameIndex]);
+
+    UpdateUniformBuffer(frameIndex);
+
     commandBuffers[frameIndex].reset();
     RecordCommandBuffer(imageIndex);
 

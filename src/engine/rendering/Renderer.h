@@ -36,6 +36,7 @@ private:
 
     std::string shaderPath;
 
+    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
 
@@ -54,6 +55,13 @@ private:
     vk::raii::Buffer indexBuffer = nullptr;
     vk::raii::DeviceMemory indexBufferMemory = nullptr;
 
+    std::vector<vk::raii::Buffer> uniformBuffers;
+    std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
+    std::vector<void *> uniformBuffersMapped;
+
+    vk::raii::DescriptorPool descriptorPool = nullptr;
+    std::vector<vk::raii::DescriptorSet> descriptorSets;
+
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
     };
@@ -69,10 +77,14 @@ private:
     bool CreateLogicalDevice();
     bool CreateSwapChain();
     bool CreateImageViews();
+    bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
     bool CreateCommandPool();
     bool CreateVertexBuffer();
     bool CreateIndexBuffer();
+    bool CreateUniformBuffers();
+    bool CreateDescriptorPool();
+    bool CreateDescriptorSets();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
@@ -80,11 +92,13 @@ private:
     static std::vector<const char *> GetRequiredExtensions();
     static vk::SurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
     static vk::PresentModeKHR ChooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
-    vk::Extent2D ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities) const;
-    vk::raii::ShaderModule CreateShaderModule(const std::vector<char> &code) const;
-    uint32_t FindMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) const;
-    bool CreateBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const;
-    void CopyBuffer(vk::raii::Buffer &srcBuffer, vk::raii::Buffer &dstBuffer, vk::DeviceSize size) const;
+    [[nodiscard]] vk::Extent2D ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities) const;
+    [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(const std::vector<char> &code) const;
+    [[nodiscard]] uint32_t FindMemoryType(uint32_t typeFilter, const vk::MemoryPropertyFlags &properties) const;
+    bool CreateBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties,
+                      vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const;
+    void CopyBuffer(const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer, vk::DeviceSize size) const;
+    void UpdateUniformBuffer(uint32_t currentFrame) const;
 
     // drawing
     void RecordCommandBuffer(uint32_t imageIndex) const;
@@ -101,7 +115,7 @@ public:
     void Cleanup();
     void DrawFrame();
 
-    const vk::raii::Device *GetDevice() const;
+    [[nodiscard]] const vk::raii::Device *GetDevice() const;
 };
 
 #endif //VOXEL_ENGINE_RENDERER_H
