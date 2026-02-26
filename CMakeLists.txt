@@ -32,6 +32,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+# stb_image
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(stb)
+
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+
 # ==============================================================================
 # Vulkan C++ Module Configuration
 # ==============================================================================
@@ -136,6 +147,7 @@ target_link_libraries(voxel_engine PRIVATE
     glm::glm
     glfw
     Vulkan::cppm
+    stb
 )
 
 add_custom_target(voxel_engine_shaders DEPENDS ${SLANG_SPV_OUTPUTS})

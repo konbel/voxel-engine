@@ -62,6 +62,11 @@ private:
     vk::raii::DescriptorPool descriptorPool = nullptr;
     std::vector<vk::raii::DescriptorSet> descriptorSets;
 
+    vk::raii::Image textureImage = nullptr;
+    vk::raii::DeviceMemory textureImageMemory = nullptr;
+    vk::raii::ImageView textureImageView = nullptr;
+    vk::raii::Sampler textureSampler = nullptr;
+
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
     };
@@ -80,6 +85,9 @@ private:
     bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
     bool CreateCommandPool();
+    bool CreateTextureImage();
+    bool CreateTextureImageView();
+    bool CreateTextureSampler();
     bool CreateVertexBuffer();
     bool CreateIndexBuffer();
     bool CreateUniformBuffers();
@@ -99,6 +107,15 @@ private:
                       vk::raii::Buffer &buffer, vk::raii::DeviceMemory &bufferMemory) const;
     void CopyBuffer(const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer, vk::DeviceSize size) const;
     void UpdateUniformBuffer(uint32_t currentFrame) const;
+    void CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling,
+                     vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image &image,
+                     vk::raii::DeviceMemory &imageMemory) const;
+    vk::raii::CommandBuffer BeginSingleTimeCommands() const;
+    void EndSingleTimeCommands(const vk::raii::CommandBuffer &commandBuffer) const;
+    void TransitionImageLayout(const vk::raii::Image &image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) const;
+    void CopyBufferToImage(const vk::raii::Buffer &buffer, const vk::raii::Image &image, uint32_t width,
+                           uint32_t height) const;
+    vk::raii::ImageView CreateImageView(const vk::Image &image, vk::Format format) const;
 
     // drawing
     void RecordCommandBuffer(uint32_t imageIndex) const;

@@ -1,0 +1,6 @@
+for file in $(find assets -name "*.aseprite"); do
+    out="res/${file#assets/}"      # remove leading "assets/"
+    out="${out%.aseprite}.png"     # replace extension
+    mkdir -p "$(dirname "$out")"   # ensure folder exists
+    aseprite -b "$file" --save-as "$out"
+done

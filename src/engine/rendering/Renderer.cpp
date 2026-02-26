@@ -13,6 +13,9 @@
 #include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #if !defined(__INTELLISENSE__) && defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_core.h>
 #endif
@@ -30,10 +33,10 @@ constexpr bool enableValidationLayers = true;
 #endif
 
 const std::vector<Vertex> vertices = {
-    {{-0.5f, 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+    {{-0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+    {{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -332,15 +335,8 @@ bool Renderer::CreateSwapChain() {
 bool Renderer::CreateImageViews() {
     swapChainImageViews.clear();
 
-    vk::ImageViewCreateInfo imageViewCreateInfo{
-        .viewType = vk::ImageViewType::e2D,
-        .format = swapChainImageFormat,
-        .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
-    };
-
     for (const auto &image: swapChainImages) {
-        imageViewCreateInfo.image = image;
-        swapChainImageViews.emplace_back(device, imageViewCreateInfo);
+        swapChainImageViews.push_back(CreateImageView(image, swapChainImageFormat));
     }
 
     Log::Debug("Image views created");
@@ -349,16 +345,24 @@ bool Renderer::CreateImageViews() {
 
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateDescriptorSetLayout() {
-    constexpr vk::DescriptorSetLayoutBinding uboLayoutBinding{
-        .binding = 0,
-        .descriptorType = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = 1,
-        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+    constexpr std::array bindings = {
+        vk::DescriptorSetLayoutBinding{
+            .binding = 0,
+            .descriptorType = vk::DescriptorType::eUniformBuffer,
+            .descriptorCount = 1,
+            .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        },
+        vk::DescriptorSetLayoutBinding{
+            .binding = 1,
+            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+            .descriptorCount = 1,
+            .stageFlags = vk::ShaderStageFlagBits::eFragment,
+        },
     };
 
     const vk::DescriptorSetLayoutCreateInfo layoutCreateInfo{
-        .bindingCount = 1,
-        .pBindings = &uboLayoutBinding,
+        .bindingCount = bindings.size(),
+        .pBindings = bindings.data(),
     };
 
     descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutCreateInfo);
@@ -486,6 +490,66 @@ bool Renderer::CreateCommandPool() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateTextureImage() {
+    int texWidth, texHeight, texChannels;
+    stbi_uc *pixels = stbi_load("../res/blocks/grass/top.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    if (!pixels) {
+        Log::Error("Failed to load texture image!");
+        return false;
+    }
+
+    const vk::DeviceSize imageSize = texWidth * texHeight * 4;
+    vk::raii::Buffer stagingBuffer = nullptr;
+    vk::raii::DeviceMemory stagingBufferMemory = nullptr;
+    CreateBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+                 vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                 stagingBuffer, stagingBufferMemory);
+
+    void *data = stagingBufferMemory.mapMemory(0, imageSize);
+    memcpy(data, pixels, imageSize);
+    stagingBufferMemory.unmapMemory();
+    stbi_image_free(pixels);
+
+    CreateImage(static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), vk::Format::eR8G8B8A8Srgb,
+                vk::ImageTiling::eOptimal,
+                vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+                vk::MemoryPropertyFlagBits::eDeviceLocal, textureImage, textureImageMemory
+    );
+
+    TransitionImageLayout(textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth),
+                      static_cast<uint32_t>(texHeight));
+    TransitionImageLayout(textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateTextureImageView() {
+    textureImageView = CreateImageView(textureImage, vk::Format::eR8G8B8A8Srgb);
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::CreateTextureSampler() {
+    constexpr vk::SamplerCreateInfo samplerCreateInfo{
+        .magFilter = vk::Filter::eNearest,
+        .minFilter = vk::Filter::eNearest,
+        .mipmapMode = vk::SamplerMipmapMode::eNearest,
+        .addressModeU = vk::SamplerAddressMode::eClampToBorder,
+        .addressModeV = vk::SamplerAddressMode::eClampToBorder,
+        .anisotropyEnable = vk::False,
+        .maxAnisotropy = 1.0f,
+        .compareEnable = vk::False,
+        .compareOp = vk::CompareOp::eAlways,
+        .borderColor = vk::BorderColor::eFloatOpaqueWhite,
+        .unnormalizedCoordinates = vk::False,
+    };
+    textureSampler = vk::raii::Sampler(device, samplerCreateInfo);
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateVertexBuffer() {
     const vk::DeviceSize size = sizeof(vertices[0]) * vertices.size();
 
@@ -577,17 +641,150 @@ bool Renderer::CreateUniformBuffers() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+void Renderer::CreateImage(const uint32_t width, const uint32_t height, const vk::Format format,
+                           const vk::ImageTiling tiling,
+                           const vk::ImageUsageFlags usage, const vk::MemoryPropertyFlags properties,
+                           vk::raii::Image &image,
+                           vk::raii::DeviceMemory &imageMemory) const {
+    const vk::ImageCreateInfo imageInfo{
+        .imageType = vk::ImageType::e2D,
+        .format = format,
+        .extent = {width, height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = vk::SampleCountFlagBits::e1,
+        .tiling = tiling,
+        .usage = usage,
+        .sharingMode = vk::SharingMode::eExclusive,
+        .initialLayout = vk::ImageLayout::eUndefined,
+    };
+    image = vk::raii::Image(device, imageInfo);
+
+    const vk::MemoryRequirements memoryRequirements = image.getMemoryRequirements();
+    const vk::MemoryAllocateInfo allocInfo{
+        .allocationSize = memoryRequirements.size,
+        .memoryTypeIndex = FindMemoryType(memoryRequirements.memoryTypeBits, properties),
+    };
+    imageMemory = vk::raii::DeviceMemory(device, allocInfo);
+    image.bindMemory(imageMemory, 0);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+vk::raii::CommandBuffer Renderer::BeginSingleTimeCommands() const {
+    const vk::CommandBufferAllocateInfo allocInfo{
+        .commandPool = commandPool,
+        .level = vk::CommandBufferLevel::ePrimary,
+        .commandBufferCount = 1,
+    };
+    vk::raii::CommandBuffer commandBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
+
+    constexpr vk::CommandBufferBeginInfo beginInfo{
+        .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+    };
+    commandBuffer.begin(beginInfo);
+
+    return commandBuffer;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::EndSingleTimeCommands(const vk::raii::CommandBuffer &commandBuffer) const {
+    commandBuffer.end();
+
+    const vk::SubmitInfo submitInfo{
+        .commandBufferCount = 1,
+        .pCommandBuffers = &*commandBuffer,
+    };
+    graphicsQueue.submit(submitInfo);
+    graphicsQueue.waitIdle();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::TransitionImageLayout(const vk::raii::Image &image, const vk::ImageLayout oldLayout,
+                                     const vk::ImageLayout newLayout) const {
+    const vk::raii::CommandBuffer commandBuffer = BeginSingleTimeCommands();
+
+    vk::ImageMemoryBarrier barrier{
+        .oldLayout = oldLayout,
+        .newLayout = newLayout,
+        .image = image,
+        .subresourceRange = {
+            vk::ImageAspectFlagBits::eColor,
+            0, 1, 0, 1,
+        },
+    };
+
+    vk::PipelineStageFlags sourceStage;
+    vk::PipelineStageFlags destinationStage;
+    if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
+        barrier.srcAccessMask = {};
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTransfer;
+    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout ==
+               vk::ImageLayout::eShaderReadOnlyOptimal) {
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+    } else {
+        Log::Error("Unsupported layout transition!");
+        return;
+    }
+
+    commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, {}, nullptr, barrier);
+
+    EndSingleTimeCommands(commandBuffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::CopyBufferToImage(const vk::raii::Buffer &buffer, const vk::raii::Image &image, const uint32_t width,
+                                 const uint32_t height) const {
+    const vk::raii::CommandBuffer commandBuffer = BeginSingleTimeCommands();
+
+    const vk::BufferImageCopy region{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = {
+            vk::ImageAspectFlagBits::eColor,
+            0, 0, 1,
+        },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {width, height, 1},
+    };
+    commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+
+    EndSingleTimeCommands(commandBuffer);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+vk::raii::ImageView Renderer::CreateImageView(const vk::Image &image, const vk::Format format) const {
+    const vk::ImageViewCreateInfo viewInfo{
+        .image = image,
+        .viewType = vk::ImageViewType::e2D,
+        .format = format,
+        .subresourceRange = {
+            vk::ImageAspectFlagBits::eColor,
+            0, 1, 0, 1,
+        },
+    };
+    return vk::raii::ImageView(device, viewInfo);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateDescriptorPool() {
-    constexpr vk::DescriptorPoolSize poolSize{
-        .type = vk::DescriptorType::eUniformBuffer,
-        .descriptorCount = static_cast<uint32_t>(MAX_IN_FLIGHT_FRAMES),
+    constexpr std::array poolSize {
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_IN_FLIGHT_FRAMES),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_IN_FLIGHT_FRAMES),
     };
 
     const vk::DescriptorPoolCreateInfo poolCreateInfo{
         .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
         .maxSets = static_cast<uint32_t>(MAX_IN_FLIGHT_FRAMES),
-        .poolSizeCount = 1,
-        .pPoolSizes = &poolSize,
+        .poolSizeCount = poolSize.size(),
+        .pPoolSizes = poolSize.data(),
     };
 
     descriptorPool = vk::raii::DescriptorPool(device, poolCreateInfo);
@@ -615,16 +812,32 @@ bool Renderer::CreateDescriptorSets() {
             .range = sizeof(UniformBufferObject),
         };
 
-        const vk::WriteDescriptorSet descriptorWrite{
-            .dstSet = *descriptorSets[i],
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &bufferInfo,
+        const vk::DescriptorImageInfo imageInfo{
+            .sampler = *textureSampler,
+            .imageView = *textureImageView,
+            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
         };
 
-        device.updateDescriptorSets(descriptorWrite, nullptr);
+        const std::array descriptorWrites = {
+            vk::WriteDescriptorSet{
+                .dstSet = *descriptorSets[i],
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = vk::DescriptorType::eUniformBuffer,
+                .pBufferInfo = &bufferInfo,
+            },
+            vk::WriteDescriptorSet{
+                .dstSet = *descriptorSets[i],
+                .dstBinding = 1,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                .pImageInfo = &imageInfo,
+            },
+        };
+
+        device.updateDescriptorSets(descriptorWrites, nullptr);
     }
 
     Log::Debug("Descriptor sets created");
@@ -763,19 +976,9 @@ bool Renderer::CreateBuffer(const vk::DeviceSize size, const vk::BufferUsageFlag
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::CopyBuffer(const vk::raii::Buffer &srcBuffer, const vk::raii::Buffer &dstBuffer,
                           const vk::DeviceSize size) const {
-    const vk::CommandBufferAllocateInfo commandBufferAllocateInfo{
-        .commandPool = *commandPool,
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1,
-    };
-    const vk::raii::CommandBuffer commandCopyBuffer = std::move(
-        device.allocateCommandBuffers(commandBufferAllocateInfo).front());
-
-    commandCopyBuffer.begin(vk::CommandBufferBeginInfo{.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    const vk::raii::CommandBuffer commandCopyBuffer = BeginSingleTimeCommands();
     commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy{0, 0, size});
-    commandCopyBuffer.end();
-    graphicsQueue.submit(vk::SubmitInfo{.commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer});
-    graphicsQueue.waitIdle();
+    EndSingleTimeCommands(commandCopyBuffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -966,6 +1169,9 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     CreateDescriptorSetLayout();
     CreateGraphicsPipeline();
     CreateCommandPool();
+    CreateTextureImage();
+    CreateTextureImageView();
+    CreateTextureSampler();
 
     if (!CreateVertexBuffer()) {
         return false;
