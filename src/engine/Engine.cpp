@@ -6,6 +6,17 @@
 
 #include "utility/logging/Log.h"
 
+const std::vector<Vertex> vertices = {
+    {{-0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
+    {{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    {{0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
+    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 bool Engine::CreateWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -34,12 +45,13 @@ void Engine::MainLoop() {
 
     while (!glfwWindowShouldClose(window)) {
         const double currentFrameTime = glfwGetTime();
-        const float deltaTime = currentFrameTime - lastFrameTime;
+        const double deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
-        mainCamera.Update(deltaTime);
+        mainCamera.Update(static_cast<float>(deltaTime));
 
         renderer.SetViewMatrix(mainCamera.GetViewMatrix());
+        renderer.UploadGeometry(vertices, indices);
         renderer.DrawFrame();
         glfwPollEvents();
     }
@@ -48,7 +60,7 @@ void Engine::MainLoop() {
 
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int scancode, const int action,
-                                  const int mods) {
+                             const int mods) {
     auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(eventWindow));
     engine->GetMainCamera().KeyInput(key, action);
 }
@@ -59,7 +71,6 @@ void Engine::HandleCursorEvents(GLFWwindow *eventWindow, const double xPos, cons
     engine->GetMainCamera().CursorInput(xPos, yPose);
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 Engine::~Engine() {
     Cleanup();
@@ -69,7 +80,7 @@ Engine::~Engine() {
 bool Engine::Initialize(const std::string &shaderPath) {
     if (initialized) {
         Log::Warning("Engine was already initialized");
-        return true;
+        return false;
     }
 
     glfwInit();

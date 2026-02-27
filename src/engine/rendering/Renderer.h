@@ -13,6 +13,8 @@ import vulkan_hpp;
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 
+#include "Vertex.h"
+
 class Renderer {
 private:
     GLFWwindow **window = nullptr;
@@ -51,10 +53,19 @@ private:
     std::vector<vk::raii::Fence> inFlightFences;
     bool frameBufferResized = false;
 
-    vk::raii::Buffer vertexBuffer = nullptr;
-    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
-    vk::raii::Buffer indexBuffer = nullptr;
-    vk::raii::DeviceMemory indexBufferMemory = nullptr;
+    std::vector<vk::raii::Buffer> vertexBuffers;
+    std::vector<vk::raii::DeviceMemory> vertexBuffersMemory;
+    std::vector<void *> vertexBuffersMapped;
+    std::vector<vk::DeviceSize> vertexBufferCapacities;
+    std::vector<bool> vertexBufferOutdated;
+    uint32_t currentVertexCount = 0;
+
+    std::vector<vk::raii::Buffer> indexBuffers;
+    std::vector<vk::raii::DeviceMemory> indexBuffersMemory;
+    std::vector<void *> indexBuffersMapped;
+    std::vector<vk::DeviceSize> indexBufferCapacities;
+    std::vector<bool> indexBufferOutdated;
+    uint32_t currentIndexCount = 0;
 
     std::vector<vk::raii::Buffer> uniformBuffers;
     std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
@@ -91,8 +102,8 @@ private:
     bool CreateTextureImage();
     bool CreateTextureImageView();
     bool CreateTextureSampler();
-    bool CreateVertexBuffer();
-    bool CreateIndexBuffer();
+    bool CreateVertexBuffers();
+    bool CreateIndexBuffers();
     bool CreateUniformBuffers();
     bool CreateDescriptorPool();
     bool CreateDescriptorSets();
@@ -120,6 +131,14 @@ private:
                            uint32_t height) const;
     vk::raii::ImageView CreateImageView(const vk::Image &image, vk::Format format) const;
 
+    // buffer management
+    void EnsureBufferCapacity(size_t frame, vk::DeviceSize requiredSize,
+                              vk::BufferUsageFlags usage,
+                              std::vector<vk::raii::Buffer> &buffers,
+                              std::vector<vk::raii::DeviceMemory> &buffersMemory,
+                              std::vector<void *> &buffersMapped,
+                              std::vector<vk::DeviceSize> &capacities) const;
+
     // drawing
     void RecordCommandBuffer(uint32_t imageIndex) const;
     void TransitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
@@ -138,6 +157,8 @@ public:
     [[nodiscard]] const vk::raii::Device *GetDevice() const;
 
     void SetViewMatrix(const glm::mat4 &view);
+    void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices);
+    void InvalidateGeometry();
 };
 
 #endif //VOXEL_ENGINE_RENDERER_H

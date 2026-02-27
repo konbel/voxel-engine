@@ -8,7 +8,6 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "Vertex.h"
 #include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 #include "engine/Engine.h"
@@ -31,17 +30,6 @@ constexpr bool enableValidationLayers = false;
 #else
 constexpr bool enableValidationLayers = true;
 #endif
-
-const std::vector<Vertex> vertices = {
-    {{-0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateInstance() {
@@ -550,66 +538,70 @@ bool Renderer::CreateTextureSampler() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool Renderer::CreateVertexBuffer() {
-    const vk::DeviceSize size = sizeof(vertices[0]) * vertices.size();
+bool Renderer::CreateVertexBuffers() {
+    vertexBuffers.clear();
+    vertexBuffersMemory.clear();
+    vertexBuffersMapped.clear();
+    vertexBuffersMapped.resize(MAX_IN_FLIGHT_FRAMES);
+    vertexBufferCapacities.clear();
+    vertexBufferCapacities.resize(MAX_IN_FLIGHT_FRAMES, 0);
+    vertexBufferOutdated.resize(MAX_IN_FLIGHT_FRAMES, true);
+    currentVertexCount = 0;
 
-    // create staging buffer
-    vk::raii::Buffer stagingBuffer = nullptr;
-    vk::raii::DeviceMemory stagingBufferMemory = nullptr;
-    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
-                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                      stagingBuffer, stagingBufferMemory)) {
-        Log::Error("Failed to create staging buffer for vertex buffer");
-        return false;
+    constexpr vk::DeviceSize initialCapacity = 1024 * sizeof(Vertex);
+
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        vk::raii::Buffer buffer = nullptr;
+        vk::raii::DeviceMemory memory = nullptr;
+
+        if (!CreateBuffer(initialCapacity, vk::BufferUsageFlagBits::eVertexBuffer,
+                          vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                          buffer, memory)) {
+            Log::Error("Failed to create vertex buffer");
+            return false;
+        }
+
+        vertexBuffersMapped[i] = memory.mapMemory(0, initialCapacity);
+        vertexBufferCapacities[i] = initialCapacity;
+        vertexBuffers.emplace_back(std::move(buffer));
+        vertexBuffersMemory.emplace_back(std::move(memory));
     }
 
-    void *dataStaging = stagingBufferMemory.mapMemory(0, size);
-    memcpy(dataStaging, vertices.data(), size);
-    stagingBufferMemory.unmapMemory();
-
-    // create device local buffer
-    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                      vk::MemoryPropertyFlagBits::eDeviceLocal,
-                      vertexBuffer, vertexBufferMemory)) {
-        Log::Error("Failed to create vertex buffer");
-        return false;
-    }
-
-    CopyBuffer(stagingBuffer, vertexBuffer, size);
-
-    Log::Debug("Vertex buffer created");
+    Log::Debug("Vertex buffers created");
     return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool Renderer::CreateIndexBuffer() {
-    const vk::DeviceSize size = sizeof(indices[0]) * indices.size();
+bool Renderer::CreateIndexBuffers() {
+    indexBuffers.clear();
+    indexBuffersMemory.clear();
+    indexBuffersMapped.clear();
+    indexBuffersMapped.resize(MAX_IN_FLIGHT_FRAMES);
+    indexBufferCapacities.clear();
+    indexBufferCapacities.resize(MAX_IN_FLIGHT_FRAMES, 0);
+    indexBufferOutdated.resize(MAX_IN_FLIGHT_FRAMES, true);
+    currentIndexCount = 0;
 
-    // create staging buffer
-    vk::raii::Buffer stagingBuffer = nullptr;
-    vk::raii::DeviceMemory stagingBufferMemory = nullptr;
-    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
-                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-                      stagingBuffer, stagingBufferMemory)) {
-        Log::Error("Failed to create staging buffer for index buffer");
-        return false;
+    constexpr vk::DeviceSize initialCapacity = 2048 * sizeof(uint16_t);
+
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        vk::raii::Buffer buffer = nullptr;
+        vk::raii::DeviceMemory memory = nullptr;
+
+        if (!CreateBuffer(initialCapacity, vk::BufferUsageFlagBits::eIndexBuffer,
+                          vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                          buffer, memory)) {
+            Log::Error("Failed to create index buffer");
+            return false;
+        }
+
+        indexBuffersMapped[i] = memory.mapMemory(0, initialCapacity);
+        indexBufferCapacities[i] = initialCapacity;
+        indexBuffers.emplace_back(std::move(buffer));
+        indexBuffersMemory.emplace_back(std::move(memory));
     }
 
-    void *dataStaging = stagingBufferMemory.mapMemory(0, size);
-    memcpy(dataStaging, indices.data(), size);
-    stagingBufferMemory.unmapMemory();
-
-    // create index buffer
-    if (!CreateBuffer(size, vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-                      vk::MemoryPropertyFlagBits::eDeviceLocal,
-                      indexBuffer, indexBufferMemory)) {
-        Log::Error("Failed to create index buffer");
-        return false;
-    }
-
-    CopyBuffer(stagingBuffer, indexBuffer, size);
-
-    Log::Debug("Index buffer created");
+    Log::Debug("Index buffers created");
     return true;
 }
 
@@ -721,8 +713,8 @@ void Renderer::TransitionImageLayout(const vk::raii::Image &image, const vk::Ima
 
         sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
         destinationStage = vk::PipelineStageFlagBits::eTransfer;
-    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout ==
-               vk::ImageLayout::eShaderReadOnlyOptimal) {
+    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+               newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
         barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
         barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
@@ -770,12 +762,53 @@ vk::raii::ImageView Renderer::CreateImageView(const vk::Image &image, const vk::
             0, 1, 0, 1,
         },
     };
-    return vk::raii::ImageView(device, viewInfo);
+    return {device, viewInfo};
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::EnsureBufferCapacity(const size_t frame, const vk::DeviceSize requiredSize,
+                                    const vk::BufferUsageFlags usage,
+                                    std::vector<vk::raii::Buffer> &buffers,
+                                    std::vector<vk::raii::DeviceMemory> &buffersMemory,
+                                    std::vector<void *> &buffersMapped,
+                                    std::vector<vk::DeviceSize> &capacities) const {
+    if (requiredSize <= capacities[frame]) {
+        return;
+    }
+
+    // grow by at least 2x to avoid frequent re-allocations
+    vk::DeviceSize newCapacity = capacities[frame];
+    while (newCapacity < requiredSize) {
+        newCapacity = newCapacity > 0 ? newCapacity * 2 : requiredSize;
+    }
+
+    // unmap and destroy the old buffer
+    buffersMemory[frame].unmapMemory();
+    buffersMapped[frame] = nullptr;
+    buffers[frame] = nullptr;
+    buffersMemory[frame] = nullptr;
+
+    // create new larger buffer
+    vk::raii::Buffer newBuffer = nullptr;
+    vk::raii::DeviceMemory newMemory = nullptr;
+    if (!CreateBuffer(newCapacity, usage,
+                      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                      newBuffer, newMemory)) {
+        Log::Error("Failed to grow buffer");
+        return;
+    }
+
+    buffersMapped[frame] = newMemory.mapMemory(0, newCapacity);
+    capacities[frame] = newCapacity;
+    buffers[frame] = std::move(newBuffer);
+    buffersMemory[frame] = std::move(newMemory);
+
+    Log::Debug("Buffer resized");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateDescriptorPool() {
-    constexpr std::array poolSize {
+    constexpr std::array poolSize{
         vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_IN_FLIGHT_FRAMES),
         vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_IN_FLIGHT_FRAMES),
     };
@@ -1038,12 +1071,14 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
                                            });
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
-    commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffer, {0});
-    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
+    commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffers[frameIndex], {0});
+    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffers[frameIndex], 0, vk::IndexType::eUint16);
     commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0,
                                                   *descriptorSets[frameIndex], nullptr);
 
-    commandBuffers[frameIndex].drawIndexed(indices.size(), 1, 0, 0, 0);
+    if (currentIndexCount > 0) {
+        commandBuffers[frameIndex].drawIndexed(currentIndexCount, 1, 0, 0, 0);
+    }
 
     commandBuffers[frameIndex].endRendering();
 
@@ -1170,11 +1205,11 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     CreateTextureImageView();
     CreateTextureSampler();
 
-    if (!CreateVertexBuffer()) {
+    if (!CreateVertexBuffers()) {
         return false;
     }
 
-    if (!CreateIndexBuffer()) {
+    if (!CreateIndexBuffers()) {
         return false;
     }
 
@@ -1258,4 +1293,33 @@ const vk::raii::Device *Renderer::GetDevice() const {
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::SetViewMatrix(const glm::mat4 &view) {
     viewMatrices[frameIndex] = view;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices) {
+    if (!vertexBufferOutdated[frameIndex] && !indexBufferOutdated[frameIndex]) {
+        return;
+    }
+
+    const vk::DeviceSize vertexDataSize = sizeof(Vertex) * vertices.size();
+    const vk::DeviceSize indexDataSize = sizeof(uint16_t) * indices.size();
+
+    EnsureBufferCapacity(frameIndex, vertexDataSize, vk::BufferUsageFlagBits::eVertexBuffer,
+                         vertexBuffers, vertexBuffersMemory, vertexBuffersMapped, vertexBufferCapacities);
+    EnsureBufferCapacity(frameIndex, indexDataSize, vk::BufferUsageFlagBits::eIndexBuffer,
+                         indexBuffers, indexBuffersMemory, indexBuffersMapped, indexBufferCapacities);
+
+    memcpy(vertexBuffersMapped[frameIndex], vertices.data(), vertexDataSize);
+    memcpy(indexBuffersMapped[frameIndex], indices.data(), indexDataSize);
+
+    currentVertexCount = static_cast<uint32_t>(vertices.size());
+    currentIndexCount = static_cast<uint32_t>(indices.size());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::InvalidateGeometry() {
+    for (int i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        vertexBufferOutdated[i] = true;
+        indexBufferOutdated[i] = true;
+    }
 }
