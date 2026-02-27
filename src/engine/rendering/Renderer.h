@@ -11,6 +11,7 @@ import vulkan_hpp;
 #endif
 
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 class Renderer {
 private:
@@ -66,6 +67,8 @@ private:
     vk::raii::DeviceMemory textureImageMemory = nullptr;
     vk::raii::ImageView textureImageView = nullptr;
     vk::raii::Sampler textureSampler = nullptr;
+
+    std::vector<glm::mat4> viewMatrices;
 
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
@@ -133,6 +136,8 @@ public:
     void DrawFrame();
 
     [[nodiscard]] const vk::raii::Device *GetDevice() const;
+
+    void SetViewMatrix(const glm::mat4 &view);
 };
 
 #endif //VOXEL_ENGINE_RENDERER_H

@@ -8,6 +8,10 @@ int main() {
     if (!engine.Initialize(SHADERS_DIR)) {
         return EXIT_FAILURE;
     }
+
+    const Camera camera;
+    engine.SetMainCamera(camera);
+
     engine.Run();
     return EXIT_SUCCESS;
 }

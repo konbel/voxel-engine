@@ -6,12 +6,12 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Vertex.h"
 #include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
+#include "engine/Engine.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -983,16 +983,10 @@ void Renderer::CopyBuffer(const vk::raii::Buffer &srcBuffer, const vk::raii::Buf
 
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::UpdateUniformBuffer(const uint32_t currentFrame) const {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    const auto currentTime = std::chrono::high_resolution_clock::now();
-    const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
     UniformBufferObject ubo{
-        .model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)),
-        .view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                            glm::vec3(0.0f, 1.0f, 0.0f)),
-        .proj = glm::perspective(glm::radians(45.0f),
+        .model = glm::mat4(1.0f),
+        .view = viewMatrices[currentFrame],
+        .proj = glm::perspective(glm::radians(90.0f),
                                  static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height),
                                  0.1f, 10.0f),
     };
@@ -1131,8 +1125,8 @@ void Renderer::CleanupSwapChain() {
 
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::OnFramebufferResized(GLFWwindow *window, int width, int height) {
-    const auto renderer = static_cast<Renderer *>(glfwGetWindowUserPointer(window));
-    renderer->frameBufferResized = true;
+    const auto engine = static_cast<Engine *>(glfwGetWindowUserPointer(window));
+    engine->GetRenderer().frameBufferResized = true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1140,12 +1134,15 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     window = glfwWindow;
     shaderPath = shaderDirectory;
 
+    for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
+        viewMatrices.emplace_back(1.0f);
+    }
+
     if (*glfwWindow == nullptr) {
         Log::Error("Invalid window pointer provided to renderer!");
         return false;
     }
 
-    glfwSetWindowUserPointer(*window, this);
     glfwSetFramebufferSizeCallback(*window, OnFramebufferResized);
 
     if (!CreateInstance()) {
@@ -1250,11 +1247,15 @@ void Renderer::DrawFrame() {
         Log::Error("Failed to present swap chain image");
     }
 
-
     frameIndex = (frameIndex + 1) % MAX_IN_FLIGHT_FRAMES;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 const vk::raii::Device *Renderer::GetDevice() const {
     return &device;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::SetViewMatrix(const glm::mat4 &view) {
+    viewMatrices[frameIndex] = view;
 }

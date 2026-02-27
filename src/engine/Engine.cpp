@@ -1,5 +1,7 @@
 #include "Engine.h"
 
+#include <chrono>
+
 #include <GLFW/glfw3.h>
 
 #include "utility/logging/Log.h"
@@ -15,17 +17,48 @@ bool Engine::CreateWindow() {
         Log::Error("Failed to create GLFW window");
         return false;
     }
+
+    glfwSetWindowUserPointer(window, this);
+
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    glfwSetKeyCallback(window, HandleKeyEvents);
+    glfwSetCursorPosCallback(window, HandleCursorEvents);
+
     return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::MainLoop() {
+    auto lastFrameTime = glfwGetTime();
+
     while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+        const double currentFrameTime = glfwGetTime();
+        const float deltaTime = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        mainCamera.Update(deltaTime);
+
+        renderer.SetViewMatrix(mainCamera.GetViewMatrix());
         renderer.DrawFrame();
+        glfwPollEvents();
     }
     renderer.GetDevice()->waitIdle();
 }
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int scancode, const int action,
+                                  const int mods) {
+    auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(eventWindow));
+    engine->GetMainCamera().KeyInput(key, action);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::HandleCursorEvents(GLFWwindow *eventWindow, const double xPos, const double yPose) {
+    auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(eventWindow));
+    engine->GetMainCamera().CursorInput(xPos, yPose);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 Engine::~Engine() {
@@ -42,6 +75,7 @@ bool Engine::Initialize(const std::string &shaderPath) {
     glfwInit();
     if (CreateWindow()) {
         renderer.Initialize(&window, shaderPath);
+
         glfwShowWindow(window);
         initialized = true;
         return true;
@@ -75,4 +109,9 @@ void Engine::Run() {
     }
 
     MainLoop();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::SetMainCamera(const Camera &camera) {
+    mainCamera = camera;
 }
