@@ -81,6 +81,9 @@ private:
 
     std::vector<glm::mat4> viewMatrices;
 
+    // ImGui
+    vk::raii::DescriptorPool imguiDescriptorPool = nullptr;
+
     const std::vector<char const *> validationLayers = {
         "VK_LAYER_KHRONOS_validation",
     };
@@ -141,6 +144,7 @@ private:
 
     // drawing
     void RecordCommandBuffer(uint32_t imageIndex) const;
+    void RenderImGui(uint32_t imageIndex) const;
     void TransitionImageLayout(uint32_t imageIndex, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
                                vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask,
                                vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask) const;
@@ -153,6 +157,10 @@ public:
     bool Initialize(GLFWwindow **glfwWindow, const std::string &shaderDirectory);
     void Cleanup();
     void DrawFrame();
+
+    bool InitImGui();
+    void ShutdownImGui();
+    static void BeginImGuiFrame() ;
 
     [[nodiscard]] const vk::raii::Device *GetDevice() const;
 

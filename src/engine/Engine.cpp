@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include <GLFW/glfw3.h>
+#include "imgui.h"
 
 #include "utility/logging/Log.h"
 
@@ -42,17 +43,41 @@ bool Engine::CreateWindow() {
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::MainLoop() {
     auto lastFrameTime = glfwGetTime();
+    double displayFps = 0.0;
+    double displayFrameTime = 0.0;
+    double displayUpdateTimer = 0.0;
+    constexpr double displayUpdateInterval = 0.1;
 
     while (!glfwWindowShouldClose(window)) {
         const double currentFrameTime = glfwGetTime();
         const double deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
+        displayUpdateTimer += deltaTime;
+        if (displayUpdateTimer >= displayUpdateInterval) {
+            displayFps = 1.0 / deltaTime;
+            displayFrameTime = deltaTime * 1000.0;
+            displayUpdateTimer = 0.0;
+        }
+
         mainCamera.Update(static_cast<float>(deltaTime));
 
+        // render ui
+        Renderer::BeginImGuiFrame();
+
+        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(200, 60), ImGuiCond_FirstUseEver);
+
+        ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoCollapse);
+        ImGui::Text("FPS: %.1f", displayFps);
+        ImGui::Text("Frame Time: %.3f ms", displayFrameTime);
+        ImGui::End();
+
+        // render game
         renderer.SetViewMatrix(mainCamera.GetViewMatrix());
         renderer.UploadGeometry(vertices, indices);
         renderer.DrawFrame();
+
         glfwPollEvents();
     }
     renderer.GetDevice()->waitIdle();

@@ -8,6 +8,10 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
+
 #include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 #include "engine/Engine.h"
@@ -1082,6 +1086,8 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
 
     commandBuffers[frameIndex].endRendering();
 
+    RenderImGui(imageIndex);
+
     // transition swap chain image to present
     TransitionImageLayout(
         imageIndex,
@@ -1132,6 +1138,97 @@ void Renderer::TransitionImageLayout(
     };
 
     commandBuffers[frameIndex].pipelineBarrier2(dependencyInfo);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool Renderer::InitImGui() {
+    constexpr std::array imguiPoolSizes = {
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1},
+    };
+
+    const vk::DescriptorPoolCreateInfo poolInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = 1,
+        .poolSizeCount = static_cast<uint32_t>(imguiPoolSizes.size()),
+        .pPoolSizes = imguiPoolSizes.data(),
+    };
+
+    imguiDescriptorPool = vk::raii::DescriptorPool(device, poolInfo);
+
+    // initialize ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    ImGuiIO &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+    ImGui_ImplGlfw_InitForVulkan(*window, false);
+
+    // initialize ImGui Vulkan backend with dynamic rendering
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    initInfo.Instance = *instance;
+    initInfo.PhysicalDevice = *physicalDevice;
+    initInfo.Device = *device;
+    initInfo.QueueFamily = graphicsFamily;
+    initInfo.Queue = *graphicsQueue;
+    initInfo.DescriptorPool = *imguiDescriptorPool;
+    initInfo.MinImageCount = static_cast<uint32_t>(swapChainImages.size());
+    initInfo.ImageCount = static_cast<uint32_t>(swapChainImages.size());
+    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    initInfo.UseDynamicRendering = true;
+    initInfo.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    initInfo.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    const auto colorFormat = static_cast<VkFormat>(swapChainImageFormat);
+    initInfo.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorFormat;
+
+    ImGui_ImplVulkan_Init(&initInfo);
+
+    Log::Debug("ImGui initialized");
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::ShutdownImGui() {
+    device.waitIdle();
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    imguiDescriptorPool = nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::BeginImGuiFrame() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::RenderImGui(const uint32_t imageIndex) const {
+    const vk::RenderingAttachmentInfo attachmentInfo{
+        .imageView = *swapChainImageViews[imageIndex],
+        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eLoad,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+    };
+
+    const vk::RenderingInfo renderingInfo{
+        .renderArea = {
+            .offset = {0, 0},
+            .extent = swapChainExtent,
+        },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &attachmentInfo,
+    };
+
+    commandBuffers[frameIndex].beginRendering(renderingInfo);
+
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *commandBuffers[frameIndex]);
+
+    commandBuffers[frameIndex].endRendering();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1219,12 +1316,15 @@ bool Renderer::Initialize(GLFWwindow **glfwWindow, const std::string &shaderDire
     CreateCommandBuffers();
     CreateSyncObjects();
 
+    InitImGui();
+
     Log::Debug("Renderer initialized successfully");
     return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 void Renderer::Cleanup() {
+    ShutdownImGui();
     CleanupSwapChain();
 }
 
