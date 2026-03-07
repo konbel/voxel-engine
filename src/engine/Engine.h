@@ -3,6 +3,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include "Block.h"
 #include "rendering/Renderer.h"
 #include "Camera.h"
 
@@ -14,6 +15,10 @@ private:
     GLFWwindow *window = nullptr;
 
     Camera mainCamera;
+
+    std::vector<Vertex> vertices;
+    std::vector<uint16_t> indices;
+    std::vector<Block> blocks;
 
     bool CreateWindow();
     void MainLoop();
@@ -31,6 +36,8 @@ public:
     Camera &GetMainCamera() { return mainCamera; }
 
     void SetMainCamera(const Camera &camera);
+
+    Block &CreateBlock(const glm::vec3 &position);
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H

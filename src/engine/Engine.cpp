@@ -7,17 +7,6 @@
 
 #include "utility/logging/Log.h"
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.0f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.0f, 0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0, 1, 2, 2, 3, 0
-};
-
 ////////////////////////////////////////////////////////////////////////////////
 bool Engine::CreateWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -150,4 +139,21 @@ void Engine::Run() {
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::SetMainCamera(const Camera &camera) {
     mainCamera = camera;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+Block &Engine::CreateBlock(const glm::vec3 &position) {
+    const Block block(position, vertices.size());
+
+    // add vertices to mesh
+    const auto &blockVertices = block.GetVertices();
+    vertices.insert(vertices.end(), blockVertices.begin(), blockVertices.end());
+
+    // add indices to mesh
+    const auto &blockIndices = block.GetIndices();
+    indices.insert(indices.end(), blockIndices.begin(), blockIndices.end());
+
+    blocks.push_back(block);
+    renderer.InvalidateGeometry();
+    return blocks.back();
 }

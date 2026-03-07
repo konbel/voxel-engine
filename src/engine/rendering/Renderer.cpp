@@ -19,10 +19,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#if !defined(__INTELLISENSE__) && defined(USE_CPP20_MODULES)
-#include <vulkan/vulkan_core.h>
-#endif
-
 struct UniformBufferObject {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
@@ -413,7 +409,7 @@ bool Renderer::CreateGraphicsPipeline() {
         .rasterizerDiscardEnable = vk::False,
         .polygonMode = vk::PolygonMode::eFill,
         .cullMode = vk::CullModeFlagBits::eBack,
-        .frontFace = vk::FrontFace::eClockwise,
+        .frontFace = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable = vk::False,
         .depthBiasSlopeFactor = 1.0f,
         .lineWidth = 1.0f,
@@ -1025,7 +1021,7 @@ void Renderer::UpdateUniformBuffer(const uint32_t currentFrame) const {
         .view = viewMatrices[currentFrame],
         .proj = glm::perspective(glm::radians(90.0f),
                                  static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height),
-                                 0.1f, 10.0f),
+                                 0.1f, 1000.0f),
     };
     ubo.proj[1][1] *= -1;
 
