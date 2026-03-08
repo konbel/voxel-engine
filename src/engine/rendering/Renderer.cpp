@@ -462,6 +462,39 @@ bool Renderer::CreateGraphicsPipeline() {
 
     graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfo);
     Log::Debug("Graphics pipeline created");
+
+    // create wireframe pipeline
+    vk::PipelineRasterizationStateCreateInfo wireframeRasterizationStateCreateInfo{
+        .depthClampEnable = vk::False,
+        .rasterizerDiscardEnable = vk::False,
+        .polygonMode = vk::PolygonMode::eLine,
+        .cullMode = vk::CullModeFlagBits::eBack,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable = vk::False,
+        .depthBiasSlopeFactor = 1.0f,
+        .lineWidth = 1.0f,
+    };
+
+    pipelineCreateInfo.pRasterizationState = &wireframeRasterizationStateCreateInfo;
+    wireframePipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfo);
+    Log::Debug("Wireframe pipeline created");
+
+    // create wireframe pipeline without culling
+    vk::PipelineRasterizationStateCreateInfo wireframeNoCullRasterizationStateCreateInfo{
+        .depthClampEnable = vk::False,
+        .rasterizerDiscardEnable = vk::False,
+        .polygonMode = vk::PolygonMode::eLine,
+        .cullMode = vk::CullModeFlagBits::eNone,
+        .frontFace = vk::FrontFace::eCounterClockwise,
+        .depthBiasEnable = vk::False,
+        .depthBiasSlopeFactor = 1.0f,
+        .lineWidth = 1.0f,
+    };
+
+    pipelineCreateInfo.pRasterizationState = &wireframeNoCullRasterizationStateCreateInfo;
+    wireframeNoCullPipeline = vk::raii::Pipeline(device, nullptr, pipelineCreateInfo);
+    Log::Debug("Wireframe no-cull pipeline created");
+
     return true;
 }
 
@@ -1064,7 +1097,18 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
     };
 
     commandBuffers[frameIndex].beginRendering(renderingInfo);
-    commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+
+    switch (renderMode) {
+        case RenderMode::Wireframe:
+            commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *wireframePipeline);
+            break;
+        case RenderMode::WireframeNoCull:
+            commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *wireframeNoCullPipeline);
+            break;
+        default:
+            commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+            break;
+    }
     commandBuffers[frameIndex].setViewport(0, vk::Viewport{
                                                0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
                                                static_cast<float>(swapChainExtent.height), 0.0f, 1.0f
@@ -1418,4 +1462,9 @@ void Renderer::InvalidateGeometry() {
         vertexBufferOutdated[i] = true;
         indexBufferOutdated[i] = true;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Renderer::SetRenderMode(const RenderMode mode) {
+    renderMode = mode;
 }

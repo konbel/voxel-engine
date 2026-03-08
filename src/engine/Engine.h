@@ -1,8 +1,6 @@
 #ifndef VOXEL_ENGINE_ENGINE_H
 #define VOXEL_ENGINE_ENGINE_H
 
-#include <memory>
-
 #include <GLFW/glfw3.h>
 
 #include "Block.h"
@@ -13,6 +11,7 @@ class Engine {
 private:
     static constexpr int CHUNK_SIZE = 16;
     static constexpr int CHUNK_HEIGHT = 256;
+    static constexpr int RENDER_TOGGLE_KEY = GLFW_KEY_R;
 
     bool initialized = false;
 
@@ -22,6 +21,7 @@ private:
     Camera mainCamera;
 
     bool blocksChanged = true;
+    RenderMode renderMode = RenderMode::Fill;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 

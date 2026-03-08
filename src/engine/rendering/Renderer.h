@@ -15,6 +15,12 @@ import vulkan_hpp;
 
 #include "Vertex.h"
 
+enum class RenderMode {
+    Fill,
+    Wireframe,
+    WireframeNoCull,
+};
+
 class Renderer {
 private:
     GLFWwindow **window = nullptr;
@@ -42,6 +48,9 @@ private:
     vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
+    vk::raii::Pipeline wireframePipeline = nullptr;
+    vk::raii::Pipeline wireframeNoCullPipeline = nullptr;
+    RenderMode renderMode = RenderMode::Fill;
 
     vk::raii::CommandPool commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers;
@@ -167,6 +176,7 @@ public:
     void SetViewMatrix(const glm::mat4 &view);
     void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
     void InvalidateGeometry();
+    void SetRenderMode(RenderMode mode);
 };
 
 #endif //VOXEL_ENGINE_RENDERER_H

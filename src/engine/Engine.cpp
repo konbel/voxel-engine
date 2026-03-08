@@ -81,6 +81,21 @@ void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int s
                              const int mods) {
     auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(eventWindow));
     engine->GetMainCamera().KeyInput(key, action);
+
+    if (key == RENDER_TOGGLE_KEY && action == GLFW_PRESS) {
+        switch (engine->renderMode) {
+            case RenderMode::Fill:
+                engine->renderMode = RenderMode::Wireframe;
+                break;
+            case RenderMode::Wireframe:
+                engine->renderMode = RenderMode::WireframeNoCull;
+                break;
+            case RenderMode::WireframeNoCull:
+                engine->renderMode = RenderMode::Fill;
+                break;
+        }
+        engine->renderer.SetRenderMode(engine->renderMode);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
