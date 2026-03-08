@@ -51,6 +51,10 @@ void Engine::MainLoop() {
 
         mainCamera.Update(static_cast<float>(deltaTime));
 
+        if (blocksChanged) {
+            UpdateMesh();
+        }
+
         // render ui
         Renderer::BeginImGuiFrame();
 
@@ -83,6 +87,67 @@ void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int s
 void Engine::HandleCursorEvents(GLFWwindow *eventWindow, const double xPos, const double yPose) {
     auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(eventWindow));
     engine->GetMainCamera().CursorInput(xPos, yPose);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::UpdateMesh() {
+    // TODO: maybe only recalculate around the part that had a change
+    vertices.clear();
+    indices.clear();
+
+    auto addFace = [this](const std::vector<Vertex> &faceVerts) {
+        const auto indexOffset = static_cast<uint32_t>(vertices.size());
+        const auto &faceIndices = Block::GetFaceIndices();
+        for (const auto &v : faceVerts) {
+            vertices.push_back(v);
+        }
+        for (const auto &idx : faceIndices) {
+            indices.push_back(idx + indexOffset);
+        }
+    };
+
+    for (int y = 0; y < CHUNK_HEIGHT; y++) {
+        for (int x = 0; x < CHUNK_SIZE; x++) {
+            for (int z = 0; z < CHUNK_SIZE; z++) {
+                const auto &block = blocks[y][x][z];
+                if (!block) {
+                    continue;
+                }
+
+                // top face (y + 1)
+                if (y + 1 >= CHUNK_HEIGHT || !blocks[y + 1][x][z]) {
+                    addFace(block->GetTopVertices());
+                }
+
+                // bottom face (y - 1)
+                if (y - 1 < 0 || !blocks[y - 1][x][z]) {
+                    addFace(block->GetBottomVertices());
+                }
+
+                // back face (z + 1)
+                if (z + 1 >= CHUNK_SIZE || !blocks[y][x][z + 1]) {
+                    addFace(block->GetBackVertices());
+                }
+
+                // front face (z - 1)
+                if (z - 1 < 0 || !blocks[y][x][z - 1]) {
+                    addFace(block->GetFrontVertices());
+                }
+
+                // right face (x + 1)
+                if (x + 1 >= CHUNK_SIZE || !blocks[y][x + 1][z]) {
+                    addFace(block->GetRightVertices());
+                }
+
+                // left face (x - 1)
+                if (x - 1 < 0 || !blocks[y][x - 1][z]) {
+                    addFace(block->GetLeftVertices());
+                }
+            }
+        }
+    }
+
+    blocksChanged = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,18 +207,18 @@ void Engine::SetMainCamera(const Camera &camera) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-Block &Engine::CreateBlock(const glm::vec3 &position) {
-    const Block block(position, vertices.size());
+Block *Engine::CreateBlock(const glm::vec3 &position) {
+    const auto chunkX = static_cast<int>(position.x);
+    const auto chunkY = static_cast<int>(position.y);
+    const auto chunkZ = static_cast<int>(position.z);
 
-    // add vertices to mesh
-    const auto &blockVertices = block.GetVertices();
-    vertices.insert(vertices.end(), blockVertices.begin(), blockVertices.end());
+    if (chunkX < 0 || chunkX >= CHUNK_SIZE || chunkY < 0 || chunkY >= CHUNK_HEIGHT || chunkZ < 0 ||
+        chunkZ >= CHUNK_SIZE) {
+        Log::Error(std::format("Block position is out of bounds: (%d, %d, %d)", chunkX, chunkY, chunkZ).c_str());
+        return nullptr;
+    }
 
-    // add indices to mesh
-    const auto &blockIndices = block.GetIndices();
-    indices.insert(indices.end(), blockIndices.begin(), blockIndices.end());
-
-    blocks.push_back(block);
-    renderer.InvalidateGeometry();
-    return blocks.back();
+    blocks[chunkY][chunkX][chunkZ] = std::make_unique<Block>(position);
+    blocksChanged = true;
+    return blocks[chunkY][chunkX][chunkZ].get();
 }

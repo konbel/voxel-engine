@@ -1,6 +1,8 @@
 #ifndef VOXEL_ENGINE_ENGINE_H
 #define VOXEL_ENGINE_ENGINE_H
 
+#include <memory>
+
 #include <GLFW/glfw3.h>
 
 #include "Block.h"
@@ -9,6 +11,9 @@
 
 class Engine {
 private:
+    static constexpr int CHUNK_SIZE = 16;
+    static constexpr int CHUNK_HEIGHT = 256;
+
     bool initialized = false;
 
     Renderer renderer;
@@ -16,14 +21,18 @@ private:
 
     Camera mainCamera;
 
+    bool blocksChanged = true;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    std::vector<Block> blocks;
+
+    // indexed with [y][x][z], where y is the height, x and z are the horizontal coordinates
+    std::array<std::array<std::array<std::unique_ptr<Block>, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_HEIGHT> blocks;
 
     bool CreateWindow();
     void MainLoop();
     static void HandleKeyEvents(GLFWwindow *eventWindow, int key, int scancode, int action, int mods);
     static void HandleCursorEvents(GLFWwindow *eventWindow, double xPos, double yPose);
+    void UpdateMesh();
 
 public:
     ~Engine();
@@ -37,7 +46,7 @@ public:
 
     void SetMainCamera(const Camera &camera);
 
-    Block &CreateBlock(const glm::vec3 &position);
+    Block *CreateBlock(const glm::vec3 &position);
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H

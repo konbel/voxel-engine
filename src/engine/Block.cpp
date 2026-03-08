@@ -38,49 +38,55 @@ const std::vector<Vertex> Block::BLOCK_VERTICES = {
     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 };
 
-const std::vector<uint32_t> Block::BLOCK_INDICES = {
-    // top face
-    0, 1, 2, 2, 3, 0,
-
-    // bottom face
-    4, 5, 6, 6, 7, 4,
-
-    // front face
-    8, 9, 10, 10, 11, 8,
-
-    // back face
-    12, 13, 14, 14, 15, 12,
-
-    // right face
-    16, 17, 18, 18, 19, 16,
-
-    // left face
-    20, 21, 22, 22, 23, 20,
-};
-
 ////////////////////////////////////////////////////////////////////////////////
-Block::Block(const glm::vec3 &spawnPosition, const uint32_t indexOffset) {
+Block::Block(const glm::vec3 &spawnPosition) {
     position = spawnPosition;
-
-    // apply position offset to vertices
-    for (const auto &vertex : BLOCK_VERTICES) {
-        Vertex offsetVertex = vertex;
-        offsetVertex.position += position;
-        vertices.push_back(offsetVertex);
-    }
-
-    // apply index offset to indices
-    for (const auto &index : BLOCK_INDICES) {
-        indices.push_back(index + indexOffset);
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-std::vector<Vertex> Block::GetVertices() const {
-    return vertices;
+static std::vector<Vertex> GetFaceVertices(const std::vector<Vertex> &blockVertices, const int faceIndex,
+                                           const glm::vec3 &pos) {
+    std::vector<Vertex> result;
+    const int start = faceIndex * 4;
+    for (int i = start; i < start + 4; i++) {
+        Vertex v = blockVertices[i];
+        v.position += pos;
+        result.push_back(v);
+    }
+    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-std::vector<uint32_t> Block::GetIndices() const {
-    return indices;
+std::vector<Vertex> Block::GetTopVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 0, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<Vertex> Block::GetBottomVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 1, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<Vertex> Block::GetBackVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 2, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<Vertex> Block::GetFrontVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 3, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<Vertex> Block::GetRightVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 4, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<Vertex> Block::GetLeftVertices() const {
+    return GetFaceVertices(BLOCK_VERTICES, 5, position);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+std::vector<uint32_t> Block::GetFaceIndices() {
+    return {0, 1, 2, 2, 3, 0};
 }

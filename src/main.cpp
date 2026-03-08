@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "engine/Engine.h"
 #include "engine/utility/files/Files.h"
 
@@ -12,8 +10,8 @@ int main() {
     const Camera camera;
     engine.SetMainCamera(camera);
 
-    for (int x = 0; x < 100; x++) {
-        for (int z = 0; z < 100; z++) {
+    for (int x = 0; x < 16; x++) {
+        for (int z = 0; z < 16; z++) {
             engine.CreateBlock({x, 0, z});
         }
     }
