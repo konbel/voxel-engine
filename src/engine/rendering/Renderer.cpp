@@ -513,7 +513,7 @@ bool Renderer::CreateCommandPool() {
 ////////////////////////////////////////////////////////////////////////////////
 bool Renderer::CreateTextureImage() {
     int texWidth, texHeight, texChannels;
-    stbi_uc *pixels = stbi_load("../res/blocks/grass/top.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc *pixels = stbi_load("../res/atlas.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     if (!pixels) {
         Log::Error("Failed to load texture image!");
         return false;
