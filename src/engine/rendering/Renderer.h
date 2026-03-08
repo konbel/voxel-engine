@@ -165,7 +165,7 @@ public:
     [[nodiscard]] const vk::raii::Device *GetDevice() const;
 
     void SetViewMatrix(const glm::mat4 &view);
-    void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices);
+    void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
     void InvalidateGeometry();
 };
 

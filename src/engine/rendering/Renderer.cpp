@@ -582,7 +582,7 @@ bool Renderer::CreateIndexBuffers() {
     indexBufferOutdated.resize(MAX_IN_FLIGHT_FRAMES, true);
     currentIndexCount = 0;
 
-    constexpr vk::DeviceSize initialCapacity = 2048 * sizeof(uint16_t);
+    constexpr vk::DeviceSize initialCapacity = 2048 * sizeof(uint32_t);
 
     for (size_t i = 0; i < MAX_IN_FLIGHT_FRAMES; i++) {
         vk::raii::Buffer buffer = nullptr;
@@ -1072,7 +1072,7 @@ void Renderer::RecordCommandBuffer(const uint32_t imageIndex) const {
     commandBuffers[frameIndex].setScissor(0, vk::Rect2D{vk::Offset2D(0, 0), swapChainExtent});
 
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffers[frameIndex], {0});
-    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffers[frameIndex], 0, vk::IndexType::eUint16);
+    commandBuffers[frameIndex].bindIndexBuffer(*indexBuffers[frameIndex], 0, vk::IndexType::eUint32);
     commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0,
                                                   *descriptorSets[frameIndex], nullptr);
 
@@ -1392,13 +1392,13 @@ void Renderer::SetViewMatrix(const glm::mat4 &view) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void Renderer::UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint16_t> &indices) {
+void Renderer::UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
     if (!vertexBufferOutdated[frameIndex] && !indexBufferOutdated[frameIndex]) {
         return;
     }
 
     const vk::DeviceSize vertexDataSize = sizeof(Vertex) * vertices.size();
-    const vk::DeviceSize indexDataSize = sizeof(uint16_t) * indices.size();
+    const vk::DeviceSize indexDataSize = sizeof(uint32_t) * indices.size();
 
     EnsureBufferCapacity(frameIndex, vertexDataSize, vk::BufferUsageFlagBits::eVertexBuffer,
                          vertexBuffers, vertexBuffersMemory, vertexBuffersMapped, vertexBufferCapacities);

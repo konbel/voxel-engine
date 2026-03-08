@@ -12,8 +12,8 @@ int main() {
     const Camera camera;
     engine.SetMainCamera(camera);
 
-    for (int x = 0; x < 10; x++) {
-        for (int z = 0; z < 10; z++) {
+    for (int x = 0; x < 100; x++) {
+        for (int z = 0; z < 100; z++) {
             engine.CreateBlock({x, 0, z});
         }
     }

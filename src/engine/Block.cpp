@@ -38,7 +38,7 @@ const std::vector<Vertex> Block::BLOCK_VERTICES = {
     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 };
 
-const std::vector<uint16_t> Block::BLOCK_INDICES = {
+const std::vector<uint32_t> Block::BLOCK_INDICES = {
     // top face
     0, 1, 2, 2, 3, 0,
 
@@ -59,7 +59,7 @@ const std::vector<uint16_t> Block::BLOCK_INDICES = {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-Block::Block(const glm::vec3 &spawnPosition, const uint16_t indexOffset) {
+Block::Block(const glm::vec3 &spawnPosition, const uint32_t indexOffset) {
     position = spawnPosition;
 
     // apply position offset to vertices
@@ -81,6 +81,6 @@ std::vector<Vertex> Block::GetVertices() const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-std::vector<uint16_t> Block::GetIndices() const {
+std::vector<uint32_t> Block::GetIndices() const {
     return indices;
 }
