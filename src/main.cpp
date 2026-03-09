@@ -12,7 +12,15 @@ int main() {
 
     for (int x = 0; x < 16; x++) {
         for (int z = 0; z < 16; z++) {
-            engine.CreateBlock({x, 0, z});
+            engine.CreateBlock({x, 10, z}, BlockInfo::Grass);
+        }
+    }
+
+    for (int y = 0; y < 10; y++) {
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                engine.CreateBlock({x, y, z}, BlockInfo::Stone);
+            }
         }
     }
 

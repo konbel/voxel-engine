@@ -46,7 +46,7 @@ public:
 
     void SetMainCamera(const Camera &camera);
 
-    Block *CreateBlock(const glm::vec3 &position);
+    Block *CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo);
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H

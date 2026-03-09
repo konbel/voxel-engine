@@ -1,19 +1,20 @@
 #include "Block.h"
 #include "rendering/TextureAtlas.h"
 
-static constexpr TextureAtlas ATLAS = {48, 16, 16};
+static constexpr TextureAtlas ATLAS = {64, 16, 16};
 
 ////////////////////////////////////////////////////////////////////////////////
-Block::Block(const glm::vec3 &spawnPosition) {
+Block::Block(const glm::ivec3 &spawnPosition, const BlockInfo &info) {
     position = spawnPosition;
+    blockInfo = info;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 static std::array<Vertex, 4> MakeFace(
     const glm::vec3 &p0, const glm::vec3 &p1,
     const glm::vec3 &p2, const glm::vec3 &p3,
-    const int tileCol, const int tileRow) {
-    const auto [uMin, vMin, uMax, vMax] = ATLAS.GetTileUV(tileCol, tileRow);
+    const glm::ivec2 &tileCoords) {
+    const auto [uMin, vMin, uMax, vMax] = ATLAS.GetTileUV(tileCoords.x, tileCoords.y);
     return {
         {
             {p0, {1, 1, 1, 1}, {uMin, vMax}},
@@ -27,66 +28,66 @@ static std::array<Vertex, 4> MakeFace(
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetTopVertices() const {
     auto face = MakeFace(
-        {-0.5f, 0.5f,  0.5f}, { 0.5f, 0.5f,  0.5f},
-        { 0.5f, 0.5f, -0.5f}, {-0.5f, 0.5f, -0.5f},
-        0, 0
+        {-0.5f, 0.5f, 0.5f}, {0.5f, 0.5f, 0.5f},
+        {0.5f, 0.5f, -0.5f}, {-0.5f, 0.5f, -0.5f},
+        blockInfo.topFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetBottomVertices() const {
     auto face = MakeFace(
-        {0.5f, -0.5f, 0.5f}, { -0.5f, -0.5f, 0.5f},
-        { -0.5f, -0.5f,  -0.5f}, {0.5f, -0.5f,  -0.5f},
-        1, 0
+        {0.5f, -0.5f, 0.5f}, {-0.5f, -0.5f, 0.5f},
+        {-0.5f, -0.5f, -0.5f}, {0.5f, -0.5f, -0.5f},
+        blockInfo.bottomFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetBackVertices() const {
     auto face = MakeFace(
-        { -0.5f, -0.5f, 0.5f}, {0.5f, -0.5f, 0.5f},
-        {0.5f, 0.5f,  0.5f}, { -0.5f, 0.5f,  0.5f},
-        2, 0
+        {-0.5f, -0.5f, 0.5f}, {0.5f, -0.5f, 0.5f},
+        {0.5f, 0.5f, 0.5f}, {-0.5f, 0.5f, 0.5f},
+        blockInfo.backFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetFrontVertices() const {
     auto face = MakeFace(
-        { 0.5f, -0.5f, -0.5f}, {-0.5f, -0.5f, -0.5f},
-        {-0.5f,  0.5f, -0.5f}, { 0.5f,  0.5f, -0.5f},
-        2, 0
+        {0.5f, -0.5f, -0.5f}, {-0.5f, -0.5f, -0.5f},
+        {-0.5f, 0.5f, -0.5f}, {0.5f, 0.5f, -0.5f},
+        blockInfo.frontFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetRightVertices() const {
     auto face = MakeFace(
-        { 0.5f, -0.5f, 0.5f}, {0.5f, -0.5f, -0.5f},
-        {0.5f,  0.5f, -0.5f}, { 0.5f,  0.5f, 0.5f},
-        2, 0
+        {0.5f, -0.5f, 0.5f}, {0.5f, -0.5f, -0.5f},
+        {0.5f, 0.5f, -0.5f}, {0.5f, 0.5f, 0.5f},
+        blockInfo.rightFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 std::vector<Vertex> Block::GetLeftVertices() const {
     auto face = MakeFace(
-        { -0.5f, -0.5f, -0.5f}, {-0.5f, -0.5f, 0.5f},
-        {-0.5f,  0.5f, 0.5f}, { -0.5f,  0.5f, -0.5f},
-        2, 0
+        {-0.5f, -0.5f, -0.5f}, {-0.5f, -0.5f, 0.5f},
+        {-0.5f, 0.5f, 0.5f}, {-0.5f, 0.5f, -0.5f},
+        blockInfo.leftFace
     );
-    for (auto &v : face) v.position += position;
+    for (auto &v: face) v.position += position;
     return {face.begin(), face.end()};
 }
 

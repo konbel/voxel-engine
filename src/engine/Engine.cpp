@@ -222,18 +222,14 @@ void Engine::SetMainCamera(const Camera &camera) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-Block *Engine::CreateBlock(const glm::vec3 &position) {
-    const auto chunkX = static_cast<int>(position.x);
-    const auto chunkY = static_cast<int>(position.y);
-    const auto chunkZ = static_cast<int>(position.z);
-
-    if (chunkX < 0 || chunkX >= CHUNK_SIZE || chunkY < 0 || chunkY >= CHUNK_HEIGHT || chunkZ < 0 ||
-        chunkZ >= CHUNK_SIZE) {
-        Log::Error(std::format("Block position is out of bounds: (%d, %d, %d)", chunkX, chunkY, chunkZ).c_str());
+Block *Engine::CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo) {
+    if (position.x < 0 || position.x >= CHUNK_SIZE || position.y < 0 || position.y >= CHUNK_HEIGHT || position.z < 0 ||
+        position.z >= CHUNK_SIZE) {
+        Log::Error(std::format("Block position is out of bounds: (%d, %d, %d)", position.x, position.y, position.z).c_str());
         return nullptr;
-    }
+        }
 
-    blocks[chunkY][chunkX][chunkZ] = std::make_unique<Block>(position);
+    blocks[position.y][position.x][position.z] = std::make_unique<Block>(position, blockInfo);
     blocksChanged = true;
-    return blocks[chunkY][chunkX][chunkZ].get();
+    return blocks[position.y][position.x][position.z].get();
 }

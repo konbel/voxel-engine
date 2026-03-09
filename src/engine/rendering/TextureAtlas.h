@@ -7,11 +7,11 @@ struct TextureAtlas {
     int atlasHeight; // in pixels
     int tileSize; // in pixels
 
-    int Cols() const {
+    [[nodiscard]] int Cols() const {
         return atlasWidth / tileSize;
     }
 
-    int Row() const {
+    [[nodiscard]] int Row() const {
         return atlasHeight / tileSize;
     }
 
@@ -19,7 +19,7 @@ struct TextureAtlas {
         float uMin, vMin, uMax, vMax;
     };
 
-    TileUV GetTileUV(const int col, const int row) const {
+    [[nodiscard]] TileUV GetTileUV(const int col, const int row) const {
         const float u0 = static_cast<float>(col * tileSize) / static_cast<float>(atlasWidth);
         const float v0 = static_cast<float>(row * tileSize) / static_cast<float>(atlasHeight);
         const float u1 = static_cast<float>((col + 1) * tileSize) / static_cast<float>(atlasWidth);

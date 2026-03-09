@@ -3,16 +3,20 @@
 
 #include <vector>
 
+#include "BlockInfo.h"
 #include "engine/rendering/Vertex.h"
 
 class Block {
 private:
     const static std::vector<Vertex> BLOCK_VERTICES;
 
-    glm::vec3 position;
+    glm::ivec3 position{};
 
 public:
-    explicit Block(const glm::vec3 &spawnPosition);
+    BlockInfo blockInfo;
+
+    Block() = delete;
+    Block(const glm::ivec3 &spawnPosition, const BlockInfo &info);
 
     [[nodiscard]] std::vector<Vertex> GetTopVertices() const;
     [[nodiscard]] std::vector<Vertex> GetBottomVertices() const;
