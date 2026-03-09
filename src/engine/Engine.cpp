@@ -55,16 +55,7 @@ void Engine::MainLoop() {
             UpdateMesh();
         }
 
-        // render ui
-        Renderer::BeginImGuiFrame();
-
-        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(200, 60), ImGuiCond_FirstUseEver);
-
-        ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoCollapse);
-        ImGui::Text("FPS: %.1f", displayFps);
-        ImGui::Text("Frame Time: %.3f ms", displayFrameTime);
-        ImGui::End();
+        RenderDebugUI(displayFps, displayFrameTime);
 
         // render game
         renderer.SetViewMatrix(mainCamera.GetViewMatrix());
@@ -113,10 +104,10 @@ void Engine::UpdateMesh() {
     auto addFace = [this](const std::vector<Vertex> &faceVerts) {
         const auto indexOffset = static_cast<uint32_t>(vertices.size());
         const auto &faceIndices = Block::GetFaceIndices();
-        for (const auto &v : faceVerts) {
+        for (const auto &v: faceVerts) {
             vertices.push_back(v);
         }
-        for (const auto &idx : faceIndices) {
+        for (const auto &idx: faceIndices) {
             indices.push_back(idx + indexOffset);
         }
     };
@@ -163,6 +154,25 @@ void Engine::UpdateMesh() {
     }
 
     blocksChanged = false;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::RenderDebugUI(const double fps, const double frameTime) const {
+    Renderer::BeginImGuiFrame();
+
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(250, 120), ImGuiCond_FirstUseEver);
+
+    ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Text("FPS: %.1f", fps);
+    ImGui::Text("Frame Time: %.3f ms", frameTime);
+
+    ImGui::Separator();
+    const auto pos = mainCamera.GetPosition();
+    ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
+    ImGui::Text("Yaw: %.1f  Pitch: %.1f", mainCamera.GetYaw(), mainCamera.GetPitch());
+
+    ImGui::End();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -225,9 +235,10 @@ void Engine::SetMainCamera(const Camera &camera) {
 Block *Engine::CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo) {
     if (position.x < 0 || position.x >= CHUNK_SIZE || position.y < 0 || position.y >= CHUNK_HEIGHT || position.z < 0 ||
         position.z >= CHUNK_SIZE) {
-        Log::Error(std::format("Block position is out of bounds: (%d, %d, %d)", position.x, position.y, position.z).c_str());
+        Log::Error(
+            std::format("Block position is out of bounds: (%d, %d, %d)", position.x, position.y, position.z).c_str());
         return nullptr;
-        }
+    }
 
     blocks[position.y][position.x][position.z] = std::make_unique<Block>(position, blockInfo);
     blocksChanged = true;

@@ -30,15 +30,20 @@ private:
     double lastX = 0.0;
     double lastY = 0.0;
 
-    float yaw = -90.0f;
+    float yaw = 0.0f;
     float pitch = 0.0f;
 
     glm::vec3 position{0.0f};
 
 public:
-    Camera();
+    Camera() = default;
+    explicit Camera(const glm::vec3 &position);
+    explicit Camera(const glm::vec3 &position, float yaw, float pitch);
 
     glm::mat4 GetViewMatrix() const;
+    glm::vec3 GetPosition() const { return position; }
+    float GetYaw() const { return yaw; }
+    float GetPitch() const { return pitch; }
 
     void KeyInput(int key, int action);
     void CursorInput(double xPos, double yPos);

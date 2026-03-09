@@ -6,16 +6,23 @@
 #include "glm/ext/matrix_transform.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////
-Camera::Camera() {
-    position = glm::vec3(2.0f, 2.0f, 2.0f);
+Camera::Camera(const glm::vec3 &position) {
+    this->position = position;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+Camera::Camera(const glm::vec3 &position, const float yaw, const float pitch) {
+    this->position = position;
+    this->yaw = yaw;
+    this->pitch = pitch;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 glm::mat4 Camera::GetViewMatrix() const {
     glm::vec3 front;
-    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.x = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     front.y = sin(glm::radians(pitch));
-    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.z = -cos(glm::radians(yaw)) * cos(glm::radians(pitch));
     front = glm::normalize(front);
 
     return glm::lookAt(position, position + front, UP);
@@ -86,8 +93,8 @@ void Camera::CursorInput(const double xPos, const double yPos) {
 ////////////////////////////////////////////////////////////////////////////////
 void Camera::Update(const float deltaTime) {
     glm::vec3 front{0.0f};
-    front.x = cos(glm::radians(yaw));
-    front.z = sin(glm::radians(yaw));
+    front.x = sin(glm::radians(yaw));
+    front.z = -cos(glm::radians(yaw));
     front = glm::normalize(front);
 
     const glm::vec3 right = glm::normalize(glm::cross(front, UP));

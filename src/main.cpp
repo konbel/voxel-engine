@@ -7,7 +7,7 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    const Camera camera;
+    const Camera camera({-5.0f, 15.0f, -5.0f}, 135, -30);
     engine.SetMainCamera(camera);
 
     for (int x = 0; x < 16; x++) {

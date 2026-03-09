@@ -33,6 +33,7 @@ private:
     static void HandleKeyEvents(GLFWwindow *eventWindow, int key, int scancode, int action, int mods);
     static void HandleCursorEvents(GLFWwindow *eventWindow, double xPos, double yPose);
     void UpdateMesh();
+    void RenderDebugUI(double fps, double frameTime) const;
 
 public:
     ~Engine();
