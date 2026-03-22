@@ -32,18 +32,22 @@ private:
 
     float yaw = 0.0f;
     float pitch = 0.0f;
+    glm::vec3 lookDirection{0.0f, 0.0f, -1.0f};
 
     glm::vec3 position{0.0f};
+
+    void UpdateLookDirection();
 
 public:
     Camera() = default;
     explicit Camera(const glm::vec3 &position);
     explicit Camera(const glm::vec3 &position, float yaw, float pitch);
 
-    glm::mat4 GetViewMatrix() const;
-    glm::vec3 GetPosition() const { return position; }
-    float GetYaw() const { return yaw; }
-    float GetPitch() const { return pitch; }
+    [[nodiscard]] glm::mat4 GetViewMatrix() const;
+    [[nodiscard]] glm::vec3 GetPosition() const { return position; }
+    [[nodiscard]] float GetYaw() const { return yaw; }
+    [[nodiscard]] float GetPitch() const { return pitch; }
+    [[nodiscard]] glm::vec3 GetLookDirection() const { return lookDirection; }
 
     void KeyInput(int key, int action);
     void CursorInput(double xPos, double yPos);

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 Camera::Camera(const glm::vec3 &position) {
     this->position = position;
+    UpdateLookDirection();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -15,17 +16,12 @@ Camera::Camera(const glm::vec3 &position, const float yaw, const float pitch) {
     this->position = position;
     this->yaw = yaw;
     this->pitch = pitch;
+    UpdateLookDirection();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 glm::mat4 Camera::GetViewMatrix() const {
-    glm::vec3 front;
-    front.x = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front.y = sin(glm::radians(pitch));
-    front.z = -cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    front = glm::normalize(front);
-
-    return glm::lookAt(position, position + front, UP);
+    return glm::lookAt(position, position + lookDirection, UP);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -88,6 +84,20 @@ void Camera::CursorInput(const double xPos, const double yPos) {
     pitch += yOffset;
 
     pitch = std::clamp(pitch, -89.0f, 89.0f);
+
+    UpdateLookDirection();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Camera::UpdateLookDirection() {
+    const float yawRad = glm::radians(yaw);
+    const float pitchRad = glm::radians(pitch);
+
+    lookDirection = glm::normalize(glm::vec3{
+        sin(yawRad) * cos(pitchRad),
+        sin(pitchRad),
+        -cos(yawRad) * cos(pitchRad)
+    });
 }
 
 ////////////////////////////////////////////////////////////////////////////////

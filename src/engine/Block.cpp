@@ -10,17 +10,17 @@ Block::Block(const glm::ivec3 &spawnPosition, const BlockInfo &info) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static std::array<Vertex, 4> MakeFace(
+std::array<Vertex, 4> Block::MakeFace(
     const glm::vec3 &p0, const glm::vec3 &p1,
     const glm::vec3 &p2, const glm::vec3 &p3,
-    const glm::ivec2 &tileCoords) {
+    const glm::ivec2 &tileCoords) const {
     const auto [uMin, vMin, uMax, vMax] = ATLAS.GetTileUV(tileCoords.x, tileCoords.y);
     return {
         {
-            {p0, {1, 1, 1, 1}, {uMin, vMax}},
-            {p1, {1, 1, 1, 1}, {uMax, vMax}},
-            {p2, {1, 1, 1, 1}, {uMax, vMin}},
-            {p3, {1, 1, 1, 1}, {uMin, vMin}},
+            {p0, overlayColor, {uMin, vMax}},
+            {p1, overlayColor, {uMax, vMax}},
+            {p2, overlayColor, {uMax, vMin}},
+            {p3, overlayColor, {uMin, vMin}},
         }
     };
 }

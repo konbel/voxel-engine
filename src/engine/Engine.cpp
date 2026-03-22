@@ -51,6 +51,20 @@ void Engine::MainLoop() {
 
         mainCamera.Update(static_cast<float>(deltaTime));
 
+        Block *hitBlock = IntersectRay(GetGridPosition(mainCamera.GetPosition()), mainCamera.GetLookDirection(), 5.0f);
+        if (hitBlock != cursorBlock) {
+            if (cursorBlock) {
+                cursorBlock->SetOverlayColor(glm::vec4(0.0f));
+            }
+
+            if (hitBlock) {
+                hitBlock->SetOverlayColor(glm::vec4(0.2f, 0.2f, 0.2f, 0.0f));
+            }
+
+            cursorBlock = hitBlock;
+            blocksChanged = true;
+        }
+
         if (blocksChanged) {
             UpdateMesh();
         }
@@ -160,8 +174,8 @@ void Engine::UpdateMesh() {
 void Engine::RenderDebugUI(const double fps, const double frameTime) const {
     Renderer::BeginImGuiFrame();
 
-    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(250, 120), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(10, 10));
+    ImGui::SetNextWindowSize(ImVec2(280, 160));
 
     ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_NoCollapse);
     ImGui::Text("FPS: %.1f", fps);
@@ -172,7 +186,28 @@ void Engine::RenderDebugUI(const double fps, const double frameTime) const {
     ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
     ImGui::Text("Yaw: %.1f  Pitch: %.1f", mainCamera.GetYaw(), mainCamera.GetPitch());
 
+    ImGui::Separator();
+    ImGui::Text("Looking at block:");
+    if (cursorBlock) {
+        const auto blockPos = cursorBlock->GetPosition();
+        ImGui::Text("Type: %s", BlockTypeToString(cursorBlock->blockInfo.type));
+        ImGui::Text("Pos: %d, %d, %d", blockPos.x, blockPos.y, blockPos.z);
+    } else {
+        ImGui::Text("Type: None");
+        ImGui::Text("Pos: -");
+    }
+
     ImGui::End();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+const char *Engine::BlockTypeToString(const BlockInfo::Type type) {
+    switch (type) {
+        case BlockInfo::Type::Grass: return "Grass";
+        case BlockInfo::Type::Stone: return "Stone";
+        case BlockInfo::Type::None: return "None";
+    }
+    return "Unknown";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -232,6 +267,17 @@ void Engine::SetMainCamera(const Camera &camera) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+glm::ivec3 Engine::GetGridPosition(const glm::vec3 &worldPosition) {
+    glm::ivec3 gridPosition;
+
+    gridPosition.x = static_cast<int>(std::round(worldPosition.x));
+    gridPosition.y = static_cast<int>(std::round(worldPosition.y));
+    gridPosition.z = static_cast<int>(std::round(worldPosition.z));
+
+    return gridPosition;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 Block *Engine::CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo) {
     if (position.x < 0 || position.x >= CHUNK_SIZE || position.y < 0 || position.y >= CHUNK_HEIGHT || position.z < 0 ||
         position.z >= CHUNK_SIZE) {
@@ -243,4 +289,32 @@ Block *Engine::CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInf
     blocks[position.y][position.x][position.z] = std::make_unique<Block>(position, blockInfo);
     blocksChanged = true;
     return blocks[position.y][position.x][position.z].get();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+Block *Engine::IntersectRay(const glm::ivec3 &origin, const glm::vec3 &direction, const float maxDistance) const {
+    const glm::vec3 dir = glm::normalize(direction);
+    const auto org = static_cast<glm::vec3>(origin);
+
+    float step = std::min(1.0f, maxDistance);
+    float currentDistance = 0.0f;
+    while (maxDistance - currentDistance > 0.01f) {
+        const glm::vec3 pos = org + dir * currentDistance;
+
+        const glm::ivec3 gridPos = GetGridPosition(pos);
+
+        // this will be changed once there are multiple chunks
+        bool outOfBounds = gridPos.y < 0 || gridPos.y >= CHUNK_HEIGHT ||
+                           gridPos.x < 0 || gridPos.x >= CHUNK_SIZE ||
+                           gridPos.z < 0 || gridPos.z >= CHUNK_SIZE;
+
+        if (!outOfBounds && blocks[gridPos.y][gridPos.x][gridPos.z]) {
+            return blocks[gridPos.y][gridPos.x][gridPos.z].get();
+        }
+
+        currentDistance += step;
+        step = std::min(1.0f, maxDistance - currentDistance);
+    }
+
+    return nullptr;
 }

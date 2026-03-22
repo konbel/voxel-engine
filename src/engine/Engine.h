@@ -25,6 +25,8 @@ private:
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
+    Block *cursorBlock = nullptr;
+
     // indexed with [y][x][z], where y is the height, x and z are the horizontal coordinates
     std::array<std::array<std::array<std::unique_ptr<Block>, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_HEIGHT> blocks;
 
@@ -34,6 +36,7 @@ private:
     static void HandleCursorEvents(GLFWwindow *eventWindow, double xPos, double yPose);
     void UpdateMesh();
     void RenderDebugUI(double fps, double frameTime) const;
+    static const char *BlockTypeToString(BlockInfo::Type type);
 
 public:
     ~Engine();
@@ -47,7 +50,9 @@ public:
 
     void SetMainCamera(const Camera &camera);
 
+    static glm::ivec3 GetGridPosition(const glm::vec3 &worldPosition) ;
     Block *CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo);
+    Block *IntersectRay(const glm::ivec3 &origin, const glm::vec3 &direction, float maxDistance) const;
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H
