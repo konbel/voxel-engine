@@ -235,8 +235,6 @@ bool Engine::Initialize(const std::string &shaderPath) {
         blockTextureAtlas = TextureAtlas(&renderer, "../res/block_atlas.png", 16);
         Block::SetTextureAtlas(&blockTextureAtlas);
 
-        renderLayers.emplace_back(&renderer, &blockTextureAtlas);
-
         glfwShowWindow(window);
         initialized = true;
         return true;
@@ -245,6 +243,11 @@ bool Engine::Initialize(const std::string &shaderPath) {
     glfwTerminate();
     Log::Error("Failed to initialize engine");
     return false;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void Engine::AddRenderLayer(const RenderLayerConfig &config) {
+    renderLayers.emplace_back(&renderer, config, &blockTextureAtlas);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

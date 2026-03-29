@@ -9,16 +9,29 @@ class TextureAtlas;
 class Vertex;
 class Renderer;
 
+struct DescriptorSetConfig {
+    std::vector<vk::DescriptorSetLayoutBinding> bindings;
+};
+
+struct RenderLayerConfig {
+    std::string shaderPath;
+    std::string vertexShaderEntry;
+    std::string fragmentShaderEntry;
+    std::vector<DescriptorSetConfig> descriptorSetConfigs;
+};
+
 class RenderLayer {
 private:
     bool active = true;
 
+    RenderLayerConfig config;
     const Renderer *renderer = nullptr;
     TextureAtlas *textureAtlas = nullptr;
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     std::vector<vk::raii::Pipeline> pipelines;
 
+    // vertex buffer data
     std::vector<vk::raii::Buffer> vertexBuffers;
     std::vector<vk::raii::DeviceMemory> vertexBuffersMemory;
     std::vector<void *> vertexBuffersMapped;
@@ -26,6 +39,7 @@ private:
     std::vector<bool> vertexBufferOutdated;
     uint32_t currentVertexCount = 0;
 
+    // index buffer data
     std::vector<vk::raii::Buffer> indexBuffers;
     std::vector<vk::raii::DeviceMemory> indexBuffersMemory;
     std::vector<void *> indexBuffersMapped;
@@ -33,29 +47,40 @@ private:
     std::vector<bool> indexBufferOutdated;
     uint32_t currentIndexCount = 0;
 
+    // uniform buffer data
     std::vector<vk::raii::Buffer> uniformBuffers;
     std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
     std::vector<void *> uniformBuffersMapped;
 
-    vk::raii::DescriptorPool descriptorPool = nullptr;
-    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
-    std::vector<vk::raii::DescriptorSet> descriptorSets;
+    // descriptors
+    std::vector<vk::raii::DescriptorSetLayout> descriptorSetLayouts;
+    std::vector<std::vector<vk::raii::DescriptorSet> > descriptorSets;
 
+    vk::raii::DescriptorPool descriptorPool = nullptr;
+
+    // additional render information
     std::vector<glm::mat4> viewMatrices;
+
+    void CreateDescriptorSetLayouts();
+    void CreateDescriptorPool();
+    void CreateDescriptorSets();
 
     bool CreatePipelines();
     bool CreateVertexBuffers();
     bool CreateIndexBuffers();
     bool CreateUniformBuffers();
-    bool CreateDescriptorPool();
-    bool CreateDescriptorSetLayout();
-    bool CreateDescriptorSets();
 
     void UpdateUniformBuffer(uint32_t currentFrame) const;
 
 public:
     RenderLayer() = default;
-    RenderLayer(const Renderer *renderer, TextureAtlas *textureAtlas);
+    RenderLayer(const Renderer *renderer, const RenderLayerConfig &config, TextureAtlas *textureAtlas);
+    ~RenderLayer();
+
+    RenderLayer(const RenderLayer &) = delete;
+    RenderLayer &operator=(const RenderLayer &) = delete;
+    RenderLayer(RenderLayer &&) noexcept = default;
+    RenderLayer &operator=(RenderLayer &&) noexcept = default;
 
     void Render() const;
 

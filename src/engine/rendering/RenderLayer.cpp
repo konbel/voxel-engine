@@ -13,20 +13,138 @@ struct UniformBufferObject {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+void RenderLayer::CreateDescriptorSetLayouts() {
+    for (const auto &descriptorSetConfig: config.descriptorSetConfigs) {
+        const vk::DescriptorSetLayoutCreateInfo layoutCreateInfo{
+            .bindingCount = static_cast<uint32_t>(descriptorSetConfig.bindings.size()),
+            .pBindings = descriptorSetConfig.bindings.data(),
+        };
+
+        descriptorSetLayouts.emplace_back(renderer->device, layoutCreateInfo);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void RenderLayer::CreateDescriptorPool() {
+    std::vector<vk::DescriptorPoolSize> poolSizes;
+
+    for (const auto &descriptorSetConfig: config.descriptorSetConfigs) {
+        for (const auto &binding: descriptorSetConfig.bindings) {
+            poolSizes.emplace_back(binding.descriptorType, binding.descriptorCount * Renderer::MAX_IN_FLIGHT_FRAMES);
+        }
+    }
+
+    if (poolSizes.empty()) {
+        return;
+    }
+
+    const uint32_t totalSets = static_cast<uint32_t>(
+        config.descriptorSetConfigs.size() * Renderer::MAX_IN_FLIGHT_FRAMES);
+
+    const vk::DescriptorPoolCreateInfo poolCreateInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = totalSets,
+        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+        .pPoolSizes = poolSizes.data(),
+    };
+
+    descriptorPool = vk::raii::DescriptorPool(renderer->device, poolCreateInfo);
+    Log::Debug("Descriptor pool created for a render layer");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void RenderLayer::CreateDescriptorSets() {
+    if (descriptorSetLayouts.empty()) {
+        return;
+    }
+
+    descriptorSets.clear();
+    descriptorSets.resize(Renderer::MAX_IN_FLIGHT_FRAMES);
+
+    for (size_t i = 0; i < Renderer::MAX_IN_FLIGHT_FRAMES; i++) {
+        std::vector<vk::DescriptorSetLayout> layouts;
+        for (const auto &layout: descriptorSetLayouts) {
+            layouts.push_back(*layout);
+        }
+
+        const vk::DescriptorSetAllocateInfo allocateInfo{
+            .descriptorPool = *descriptorPool,
+            .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+            .pSetLayouts = layouts.data(),
+        };
+
+        auto allocatedSets = vk::raii::DescriptorSets(renderer->device, allocateInfo);
+
+        std::vector<vk::WriteDescriptorSet> descriptorWrites;
+        std::vector<vk::DescriptorBufferInfo> bufferInfos;
+        std::vector<vk::DescriptorImageInfo> imageInfos;
+
+        for (size_t setIdx = 0; setIdx < config.descriptorSetConfigs.size(); ++setIdx) {
+            for (const auto &binding: config.descriptorSetConfigs[setIdx].bindings) {
+                vk::WriteDescriptorSet write{
+                    .dstSet = *allocatedSets[setIdx],
+                    .dstBinding = binding.binding,
+                    .dstArrayElement = 0,
+                    .descriptorCount = binding.descriptorCount,
+                    .descriptorType = binding.descriptorType,
+                };
+
+                switch (binding.descriptorType) {
+                    case vk::DescriptorType::eUniformBuffer:
+                        bufferInfos.push_back({
+                            .buffer = *uniformBuffers[i],
+                            .offset = 0,
+                            .range = sizeof(UniformBufferObject),
+                        });
+                        write.pBufferInfo = &bufferInfos.back();
+                        break;
+
+                    case vk::DescriptorType::eCombinedImageSampler:
+                        imageInfos.push_back({
+                            .sampler = *textureAtlas->GetSampler(),
+                            .imageView = *textureAtlas->GetImageView(),
+                            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+                        });
+                        write.pImageInfo = &imageInfos.back();
+                        break;
+
+                    default:
+                        break;
+                }
+
+                descriptorWrites.push_back(write);
+            }
+        }
+
+        renderer->device.updateDescriptorSets(descriptorWrites, nullptr);
+
+        for (auto &set: allocatedSets) {
+            descriptorSets[i].emplace_back(std::move(set));
+        }
+
+        descriptorWrites.clear();
+        bufferInfos.clear();
+        imageInfos.clear();
+    }
+
+    Log::Debug("Descriptor sets created");
+}
+
+////////////////////////////////////////////////////////////////////////////////
 bool RenderLayer::CreatePipelines() {
     const vk::raii::ShaderModule shaderModule = renderer->CreateShaderModule(
-        ReadFile(renderer->shaderPath + "/shader.spv"));
+        ReadFile(std::format("{}/{}", renderer->shaderPath, config.shaderPath)));
 
     const vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
         .stage = vk::ShaderStageFlagBits::eVertex,
         .module = *shaderModule,
-        .pName = "vertMain",
+        .pName = config.vertexShaderEntry.data(),
     };
 
     const vk::PipelineShaderStageCreateInfo fragShaderStageInfo{
         .stage = vk::ShaderStageFlagBits::eFragment,
         .module = *shaderModule,
-        .pName = "fragMain",
+        .pName = config.fragmentShaderEntry.data(),
     };
 
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
@@ -87,8 +205,8 @@ bool RenderLayer::CreatePipelines() {
     };
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-        .setLayoutCount = 1,
-        .pSetLayouts = &*descriptorSetLayout,
+        .setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+        .pSetLayouts = &*descriptorSetLayouts[0],
         .pushConstantRangeCount = 0,
     };
     pipelineLayout = vk::raii::PipelineLayout(renderer->device, pipelineLayoutCreateInfo);
@@ -220,106 +338,6 @@ bool RenderLayer::CreateUniformBuffers() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool RenderLayer::CreateDescriptorPool() {
-    constexpr std::array poolSize{
-        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, Renderer::MAX_IN_FLIGHT_FRAMES),
-        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, Renderer::MAX_IN_FLIGHT_FRAMES),
-    };
-
-    const uint32_t totalSets = Renderer::MAX_IN_FLIGHT_FRAMES;
-
-    const vk::DescriptorPoolCreateInfo poolCreateInfo{
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        .maxSets = totalSets,
-        .poolSizeCount = poolSize.size(),
-        .pPoolSizes = poolSize.data(),
-    };
-
-    descriptorPool = vk::raii::DescriptorPool(renderer->device, poolCreateInfo);
-    Log::Debug("Descriptor pool created for a render layer");
-    return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-bool RenderLayer::CreateDescriptorSetLayout() {
-    constexpr std::array bindings = {
-        vk::DescriptorSetLayoutBinding{
-            .binding = 0,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .descriptorCount = 1,
-            .stageFlags = vk::ShaderStageFlagBits::eVertex,
-        },
-        vk::DescriptorSetLayoutBinding{
-            .binding = 1,
-            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-            .descriptorCount = 1,
-            .stageFlags = vk::ShaderStageFlagBits::eFragment,
-        },
-    };
-
-    const vk::DescriptorSetLayoutCreateInfo layoutCreateInfo{
-        .bindingCount = bindings.size(),
-        .pBindings = bindings.data(),
-    };
-
-    descriptorSetLayout = vk::raii::DescriptorSetLayout(renderer->device, layoutCreateInfo);
-    Log::Debug("Descriptor set layout created");
-    return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-bool RenderLayer::CreateDescriptorSets() {
-    const std::vector<vk::DescriptorSetLayout> layouts(Renderer::MAX_IN_FLIGHT_FRAMES, *descriptorSetLayout);
-
-    const vk::DescriptorSetAllocateInfo allocateInfo{
-        .descriptorPool = *descriptorPool,
-        .descriptorSetCount = static_cast<uint32_t>(Renderer::MAX_IN_FLIGHT_FRAMES),
-        .pSetLayouts = layouts.data(),
-    };
-
-    descriptorSets.clear();
-    descriptorSets = vk::raii::DescriptorSets(renderer->device, allocateInfo);
-
-    for (size_t i = 0; i < Renderer::MAX_IN_FLIGHT_FRAMES; i++) {
-        const vk::DescriptorBufferInfo bufferInfo{
-            .buffer = *uniformBuffers[i],
-            .offset = 0,
-            .range = sizeof(UniformBufferObject),
-        };
-
-        const vk::DescriptorImageInfo imageInfo{
-            .sampler = *textureAtlas->GetSampler(),
-            .imageView = *textureAtlas->GetImageView(),
-            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-        };
-
-        const std::array descriptorWrites = {
-            vk::WriteDescriptorSet{
-                .dstSet = *descriptorSets[i],
-                .dstBinding = 0,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = vk::DescriptorType::eUniformBuffer,
-                .pBufferInfo = &bufferInfo,
-            },
-            vk::WriteDescriptorSet{
-                .dstSet = *descriptorSets[i],
-                .dstBinding = 1,
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-                .pImageInfo = &imageInfo,
-            },
-        };
-
-        renderer->device.updateDescriptorSets(descriptorWrites, nullptr);
-    }
-
-    Log::Debug("Descriptor sets created");
-    return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 void RenderLayer::UpdateUniformBuffer(const uint32_t currentFrame) const {
     UniformBufferObject ubo{
         .model = glm::mat4(1.0f),
@@ -335,7 +353,9 @@ void RenderLayer::UpdateUniformBuffer(const uint32_t currentFrame) const {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-RenderLayer::RenderLayer(const Renderer *renderer, TextureAtlas *textureAtlas) {
+RenderLayer::RenderLayer(const Renderer *renderer, const RenderLayerConfig &config, TextureAtlas *textureAtlas) {
+    this->config = config;
+
     if (!renderer) {
         Log::Error("Renderer pointer is null when creating a render layer");
         return;
@@ -352,13 +372,22 @@ RenderLayer::RenderLayer(const Renderer *renderer, TextureAtlas *textureAtlas) {
         viewMatrices.emplace_back(1.0f);
     }
 
-    CreateDescriptorSetLayout();
-    CreatePipelines();
     CreateVertexBuffers();
     CreateIndexBuffers();
     CreateUniformBuffers();
+
+    CreateDescriptorSetLayouts();
     CreateDescriptorPool();
     CreateDescriptorSets();
+
+    CreatePipelines();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+RenderLayer::~RenderLayer() {
+    descriptorSets.clear();
+    descriptorPool.clear();
+    descriptorSetLayouts.clear();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -379,8 +408,9 @@ void RenderLayer::Render() const {
 
     commandBuffers[frameIndex].bindVertexBuffers(0, *vertexBuffers[frameIndex], {0});
     commandBuffers[frameIndex].bindIndexBuffer(*indexBuffers[frameIndex], 0, vk::IndexType::eUint32);
+
     commandBuffers[frameIndex].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipelineLayout, 0,
-                                                  *descriptorSets[frameIndex], nullptr);
+                                                  *descriptorSets[frameIndex][0], nullptr);
 
     if (currentIndexCount > 0) {
         commandBuffers[frameIndex].drawIndexed(currentIndexCount, 1, 0, 0, 0);

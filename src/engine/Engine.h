@@ -48,14 +48,21 @@ private:
 public:
     ~Engine();
 
+    // creation
     bool Initialize(const std::string &shaderPath);
-    void Cleanup();
-    void Run();
+    void AddRenderLayer(const RenderLayerConfig &config);
 
+    // destruction
+    void Cleanup();
+
+    // getters
     Renderer &GetRenderer() { return renderer; }
     Camera &GetMainCamera() { return mainCamera; }
 
+    // setters
     void SetMainCamera(const Camera &camera);
+
+    void Run();
 
     static glm::ivec3 GetGridPosition(const glm::vec3 &worldPosition) ;
     Block *CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo);
