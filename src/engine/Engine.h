@@ -6,6 +6,7 @@
 #include "Block.h"
 #include "rendering/Renderer.h"
 #include "Camera.h"
+#include "TextureAtlas.h"
 
 class Engine {
 private:
@@ -15,6 +16,7 @@ private:
 
     bool initialized = false;
 
+    // rendering
     Renderer renderer;
     GLFWwindow *window = nullptr;
 
@@ -25,6 +27,11 @@ private:
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
+    TextureAtlas blockTextureAtlas;
+
+    std::vector<RenderLayer> renderLayers;
+
+    // game data
     Block *cursorBlock = nullptr;
 
     // indexed with [y][x][z], where y is the height, x and z are the horizontal coordinates
@@ -52,7 +59,7 @@ public:
 
     static glm::ivec3 GetGridPosition(const glm::vec3 &worldPosition) ;
     Block *CreateBlock(const glm::ivec3 &position, const BlockInfo &blockInfo);
-    Block *IntersectRay(const glm::ivec3 &origin, const glm::vec3 &direction, float maxDistance) const;
+    [[nodiscard]] Block *IntersectRay(const glm::ivec3 &origin, const glm::vec3 &direction, float maxDistance) const;
 };
 
 #endif //VOXEL_ENGINE_ENGINE_H

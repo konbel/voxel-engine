@@ -4,6 +4,8 @@
 
 #include <GLFW/glfw3.h>
 #include "imgui.h"
+#include "TextureAtlas.h"
+#include "rendering/RenderLayer.h"
 
 #include "utility/logging/Log.h"
 
@@ -42,6 +44,7 @@ void Engine::MainLoop() {
         const double deltaTime = currentFrameTime - lastFrameTime;
         lastFrameTime = currentFrameTime;
 
+        // update
         displayUpdateTimer += deltaTime;
         if (displayUpdateTimer >= displayUpdateInterval) {
             displayFps = 1.0 / deltaTime;
@@ -69,16 +72,17 @@ void Engine::MainLoop() {
             UpdateMesh();
         }
 
+        // render game
+        renderLayers[0].SetViewMatrix(mainCamera.GetViewMatrix());
+        renderLayers[0].UploadGeometry(vertices, indices);
+
         RenderDebugUI(displayFps, displayFrameTime);
 
-        // render game
-        renderer.SetViewMatrix(mainCamera.GetViewMatrix());
-        renderer.UploadGeometry(vertices, indices);
-        renderer.DrawFrame();
+        renderer.DrawFrame(renderLayers);
 
         glfwPollEvents();
     }
-    renderer.GetDevice()->waitIdle();
+    renderer.GetDevice().waitIdle();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +103,7 @@ void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int s
                 engine->renderMode = RenderMode::Fill;
                 break;
         }
-        engine->renderer.SetRenderMode(engine->renderMode);
+        // engine->renderer.SetRenderMode(engine->renderMode);
     }
 }
 
@@ -224,7 +228,14 @@ bool Engine::Initialize(const std::string &shaderPath) {
 
     glfwInit();
     if (CreateWindow()) {
-        renderer.Initialize(&window, shaderPath);
+        if (!renderer.Create(&window, shaderPath)) {
+            Log::Error("Failed to create renderer");
+        }
+
+        blockTextureAtlas = TextureAtlas(&renderer, "../res/block_atlas.png", 16);
+        Block::SetTextureAtlas(&blockTextureAtlas);
+
+        renderLayers.emplace_back(&renderer, &blockTextureAtlas);
 
         glfwShowWindow(window);
         initialized = true;

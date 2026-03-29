@@ -1,7 +1,8 @@
 #include "Block.h"
-#include "rendering/TextureAtlas.h"
+#include "TextureAtlas.h"
+#include "utility/logging/Log.h"
 
-static constexpr TextureAtlas ATLAS = {64, 16, 16};
+TextureAtlas *Block::textureAtlas = nullptr;
 
 ////////////////////////////////////////////////////////////////////////////////
 Block::Block(const glm::ivec3 &spawnPosition, const BlockInfo &info) {
@@ -14,7 +15,12 @@ std::array<Vertex, 4> Block::MakeFace(
     const glm::vec3 &p0, const glm::vec3 &p1,
     const glm::vec3 &p2, const glm::vec3 &p3,
     const glm::ivec2 &tileCoords) const {
-    const auto [uMin, vMin, uMax, vMax] = ATLAS.GetTileUV(tileCoords.x, tileCoords.y);
+    if (textureAtlas == nullptr) {
+        Log::Error("Texture atlas not set for block");
+        return {};
+    }
+
+    const auto [uMin, vMin, uMax, vMax] = textureAtlas->GetTileUV(tileCoords.x, tileCoords.y);
     return {
         {
             {p0, overlayColor, {uMin, vMax}},

@@ -6,9 +6,12 @@
 #include "BlockInfo.h"
 #include "engine/rendering/Vertex.h"
 
+class TextureAtlas;
+
 class Block {
 private:
     const static std::vector<Vertex> BLOCK_VERTICES;
+    static TextureAtlas *textureAtlas;
 
     glm::ivec3 position{};
     glm::vec4 overlayColor{0.0f};
@@ -22,6 +25,7 @@ public:
     [[nodiscard]] glm::ivec3 GetPosition() const { return position; }
     [[nodiscard]] glm::vec3 GetOverlayColor() const { return overlayColor; }
 
+    static void SetTextureAtlas(TextureAtlas *atlas) { textureAtlas = atlas; }
     void SetOverlayColor(const glm::vec4 color) { overlayColor = color; }
 
     [[nodiscard]] std::vector<Vertex> GetTopVertices() const;
