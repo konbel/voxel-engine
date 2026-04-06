@@ -12,7 +12,6 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
-#include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 #include "engine/Engine.h"
 
@@ -982,6 +981,11 @@ void Renderer::DrawFrame(const std::vector<RenderLayer> &renderLayers) {
 ////////////////////////////////////////////////////////////////////////////////
 const vk::raii::Device &Renderer::GetDevice() const {
     return device;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+const vk::Extent2D &Renderer::GetSwapChainExtent() const {
+    return swapChainExtent;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -4,6 +4,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "glm/fwd.hpp"
+#include "texture/TextureAtlas.h"
 
 class TextureAtlas;
 class Vertex;
@@ -14,6 +15,7 @@ struct DescriptorSetConfig {
 };
 
 struct RenderLayerConfig {
+    TextureAtlas *textureAtlas = nullptr;
     std::string shaderPath;
     std::string vertexShaderEntry;
     std::string fragmentShaderEntry;
@@ -26,7 +28,6 @@ private:
 
     RenderLayerConfig config;
     const Renderer *renderer = nullptr;
-    TextureAtlas *textureAtlas = nullptr;
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     std::vector<vk::raii::Pipeline> pipelines;
@@ -60,6 +61,7 @@ private:
 
     // additional render information
     std::vector<glm::mat4> viewMatrices;
+    std::vector<glm::mat4> projectionMatrices;
 
     void CreateDescriptorSetLayouts();
     void CreateDescriptorPool();
@@ -74,7 +76,7 @@ private:
 
 public:
     RenderLayer() = default;
-    RenderLayer(const Renderer *renderer, const RenderLayerConfig &config, TextureAtlas *textureAtlas);
+    RenderLayer(const Renderer *renderer, const RenderLayerConfig &config);
     ~RenderLayer();
 
     RenderLayer(const RenderLayer &) = delete;
@@ -85,11 +87,12 @@ public:
     void Render() const;
 
     // getter
-    bool IsActive() const;
+    [[nodiscard]] bool IsActive() const;
 
     // setter
     void SetActive(bool active);
     void SetViewMatrix(const glm::mat4 &view);
+    void SetProjectionMatrix(const glm::mat4 &projection);
     void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
     void InvalidateGeometry();
 };

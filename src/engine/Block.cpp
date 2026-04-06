@@ -1,8 +1,8 @@
 #include "Block.h"
-#include "TextureAtlas.h"
+#include "rendering/texture/TiledTextureAtlas.h"
 #include "utility/logging/Log.h"
 
-TextureAtlas *Block::textureAtlas = nullptr;
+TiledTextureAtlas *Block::textureAtlas = nullptr;
 
 ////////////////////////////////////////////////////////////////////////////////
 Block::Block(const glm::ivec3 &spawnPosition, const BlockInfo &info) {

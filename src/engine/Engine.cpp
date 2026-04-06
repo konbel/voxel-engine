@@ -4,7 +4,9 @@
 
 #include <GLFW/glfw3.h>
 #include "imgui.h"
-#include "TextureAtlas.h"
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
+#include "rendering/texture/TiledTextureAtlas.h"
 #include "rendering/RenderLayer.h"
 
 #include "utility/logging/Log.h"
@@ -72,9 +74,33 @@ void Engine::MainLoop() {
             UpdateMesh();
         }
 
+        // Todo: only update on viewport size change
+        const auto &[width, height] = renderer.GetSwapChainExtent();
+        perspectiveMatrix = glm::perspective(glm::radians(90.0f), static_cast<float>(width) /
+                                                                  static_cast<float>(height), 0.1f, 1000.0f);
+        perspectiveMatrix[1][1] *= -1;
+        orthogonalMatrix = glm::ortho(0.0f, static_cast<float>(width), 0.0f, static_cast<float>(height), -1000.0f, 1000.0f);
+
         // render game
         renderLayers[0].SetViewMatrix(mainCamera.GetViewMatrix());
+        renderLayers[0].SetProjectionMatrix(perspectiveMatrix);
         renderLayers[0].UploadGeometry(vertices, indices);
+
+        const float halfWidth = static_cast<float>(width) / 2.0f;
+        const float halfHeight = static_cast<float>(height) / 2.0f;
+        constexpr float offset = 8.0f;
+        uiVertices = {
+            {
+                {{halfWidth - offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(0, 7)},
+                {{halfWidth + offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(7, 7)},
+                {{halfWidth + offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(7, 0)},
+                {{halfWidth - offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(0, 0)},
+            }
+        };
+
+        renderLayers[1].SetViewMatrix(glm::mat4(1.0f));
+        renderLayers[1].SetProjectionMatrix(orthogonalMatrix);
+        renderLayers[1].UploadGeometry(uiVertices, {0, 2, 1, 0, 3, 2});
 
         RenderDebugUI(displayFps, displayFrameTime);
 
@@ -232,8 +258,62 @@ bool Engine::Initialize(const std::string &shaderPath) {
             Log::Error("Failed to create renderer");
         }
 
-        blockTextureAtlas = TextureAtlas(&renderer, "../res/block_atlas.png", 16);
+        blockTextureAtlas = TiledTextureAtlas(&renderer, "./res/block_atlas.png", 16);
         Block::SetTextureAtlas(&blockTextureAtlas);
+
+        uiTextureAtlas = TextureAtlas(&renderer, "./res/gui_atlas.png");
+
+        const RenderLayerConfig worldRenderConfig{
+            .textureAtlas = &blockTextureAtlas,
+            .shaderPath = "shader.spv",
+            .vertexShaderEntry = "vertMain",
+            .fragmentShaderEntry = "fragMain",
+            .descriptorSetConfigs = {
+                {
+                    .bindings = {
+                        vk::DescriptorSetLayoutBinding{
+                            .binding = 0,
+                            .descriptorType = vk::DescriptorType::eUniformBuffer,
+                            .descriptorCount = 1,
+                            .stageFlags = vk::ShaderStageFlagBits::eVertex,
+                        },
+                        vk::DescriptorSetLayoutBinding{
+                            .binding = 1,
+                            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                            .descriptorCount = 1,
+                            .stageFlags = vk::ShaderStageFlagBits::eFragment,
+                        },
+                    },
+                },
+            },
+        };
+        AddRenderLayer(worldRenderConfig);
+
+        const RenderLayerConfig uiRenderConfig{
+            .textureAtlas = &uiTextureAtlas,
+            .shaderPath = "shader.spv",
+            .vertexShaderEntry = "vertMain",
+            .fragmentShaderEntry = "fragMain",
+            .descriptorSetConfigs = {
+                {
+                    .bindings = {
+                        vk::DescriptorSetLayoutBinding{
+                            .binding = 0,
+                            .descriptorType = vk::DescriptorType::eUniformBuffer,
+                            .descriptorCount = 1,
+                            .stageFlags = vk::ShaderStageFlagBits::eVertex,
+                        },
+                        vk::DescriptorSetLayoutBinding{
+                            .binding = 1,
+                            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                            .descriptorCount = 1,
+                            .stageFlags = vk::ShaderStageFlagBits::eFragment,
+                        }
+                    }
+                }
+            }
+        };
+        AddRenderLayer(uiRenderConfig);
 
         glfwShowWindow(window);
         initialized = true;
@@ -247,7 +327,7 @@ bool Engine::Initialize(const std::string &shaderPath) {
 
 ////////////////////////////////////////////////////////////////////////////////
 void Engine::AddRenderLayer(const RenderLayerConfig &config) {
-    renderLayers.emplace_back(&renderer, config, &blockTextureAtlas);
+    renderLayers.emplace_back(&renderer, config);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -160,6 +160,13 @@ endforeach()
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 add_executable(voxel_engine ${SOURCES})
 
+# copy resources
+add_custom_command(TARGET voxel_engine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/res ${CMAKE_CURRENT_BINARY_DIR}/res
+    COMMENT "Copying resources to build directory"
+)
+
 if(ENABLE_CPP20_MODULE)
     set_target_properties(voxel_engine PROPERTIES
         CXX_SCAN_FOR_MODULES ON

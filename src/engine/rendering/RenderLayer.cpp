@@ -3,7 +3,7 @@
 #include "engine/utility/files/Files.h"
 #include "engine/utility/logging/Log.h"
 #include "Vertex.h"
-#include "engine/TextureAtlas.h"
+#include "texture/TiledTextureAtlas.h"
 #include "glm/ext/matrix_clip_space.hpp"
 
 struct UniformBufferObject {
@@ -101,8 +101,8 @@ void RenderLayer::CreateDescriptorSets() {
 
                     case vk::DescriptorType::eCombinedImageSampler:
                         imageInfos.push_back({
-                            .sampler = *textureAtlas->GetSampler(),
-                            .imageView = *textureAtlas->GetImageView(),
+                            .sampler = *config.textureAtlas->GetSampler(),
+                            .imageView = *config.textureAtlas->GetImageView(),
                             .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
                         });
                         write.pImageInfo = &imageInfos.back();
@@ -194,7 +194,13 @@ bool RenderLayer::CreatePipelines() {
     };
 
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{
-        .blendEnable = vk::False,
+        .blendEnable = vk::True,
+        .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+        .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+        .colorBlendOp = vk::BlendOp::eAdd,
+        .srcAlphaBlendFactor = vk::BlendFactor::eSrcAlpha,
+        .dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+        .alphaBlendOp = vk::BlendOp::eAdd,
         .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
                           vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
     };
@@ -339,21 +345,17 @@ bool RenderLayer::CreateUniformBuffers() {
 
 ////////////////////////////////////////////////////////////////////////////////
 void RenderLayer::UpdateUniformBuffer(const uint32_t currentFrame) const {
-    UniformBufferObject ubo{
+    const UniformBufferObject ubo{
         .model = glm::mat4(1.0f),
         .view = viewMatrices[currentFrame],
-        .proj = glm::perspective(glm::radians(90.0f),
-                                 static_cast<float>(renderer->swapChainExtent.width) /
-                                 static_cast<float>(renderer->swapChainExtent.height),
-                                 0.1f, 1000.0f),
+        .proj = projectionMatrices[currentFrame],
     };
-    ubo.proj[1][1] *= -1;
 
     memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-RenderLayer::RenderLayer(const Renderer *renderer, const RenderLayerConfig &config, TextureAtlas *textureAtlas) {
+RenderLayer::RenderLayer(const Renderer *renderer, const RenderLayerConfig &config) {
     this->config = config;
 
     if (!renderer) {
@@ -362,14 +364,9 @@ RenderLayer::RenderLayer(const Renderer *renderer, const RenderLayerConfig &conf
     }
     this->renderer = renderer;
 
-    if (!textureAtlas) {
-        Log::Error("Texture atlas pointer is null when creating a render layer");
-        return;
-    }
-    this->textureAtlas = textureAtlas;
-
     for (size_t i = 0; i < Renderer::MAX_IN_FLIGHT_FRAMES; i++) {
         viewMatrices.emplace_back(1.0f);
+        projectionMatrices.emplace_back(1.0f);
     }
 
     CreateVertexBuffers();
@@ -430,6 +427,11 @@ void RenderLayer::SetActive(bool active) {
 ////////////////////////////////////////////////////////////////////////////////
 void RenderLayer::SetViewMatrix(const glm::mat4 &view) {
     viewMatrices[renderer->frameIndex] = view;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void RenderLayer::SetProjectionMatrix(const glm::mat4 &projection) {
+    projectionMatrices[renderer->frameIndex] = projection;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

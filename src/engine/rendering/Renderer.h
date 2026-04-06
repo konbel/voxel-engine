@@ -16,7 +16,7 @@ import vulkan_hpp;
 
 #include "Vertex.h"
 
-class TextureAtlas;
+class TiledTextureAtlas;
 
 enum class RenderMode {
     Fill,
@@ -130,6 +130,7 @@ private:
 public:
     // getters
     [[nodiscard]] const vk::raii::Device &GetDevice() const;
+    [[nodiscard]] const vk::Extent2D &GetSwapChainExtent() const;
 
     // creation
     bool Create(GLFWwindow **glfwWindow, const std::string &shaderDirectory);

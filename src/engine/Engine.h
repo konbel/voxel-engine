@@ -6,7 +6,7 @@
 #include "Block.h"
 #include "rendering/Renderer.h"
 #include "Camera.h"
-#include "TextureAtlas.h"
+#include "rendering/texture/TiledTextureAtlas.h"
 
 class Engine {
 private:
@@ -27,15 +27,21 @@ private:
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
-    TextureAtlas blockTextureAtlas;
+    TiledTextureAtlas blockTextureAtlas;
+    TextureAtlas uiTextureAtlas;
 
     std::vector<RenderLayer> renderLayers;
+
+    glm::mat4 perspectiveMatrix = glm::mat4(1.0f);
+    glm::mat4 orthogonalMatrix = glm::mat4(1.0f);
 
     // game data
     Block *cursorBlock = nullptr;
 
     // indexed with [y][x][z], where y is the height, x and z are the horizontal coordinates
     std::array<std::array<std::array<std::unique_ptr<Block>, CHUNK_SIZE>, CHUNK_SIZE>, CHUNK_HEIGHT> blocks;
+
+    std::vector<Vertex> uiVertices;
 
     bool CreateWindow();
     void MainLoop();

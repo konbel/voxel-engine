@@ -1,5 +1,6 @@
 #ifndef VOXEL_ENGINE_TEXTUREATLAS_H
 #define VOXEL_ENGINE_TEXTUREATLAS_H
+#include "glm/vec2.hpp"
 
 #if defined(__INTELLISENSE__) || !defined(USE_CPP20_MODULES)
 #include <vulkan/vulkan_raii.hpp>
@@ -11,10 +12,9 @@ import vulkan_hpp;
 class Renderer;
 
 class TextureAtlas {
-private:
+protected:
     int atlasWidth = 0; // in pixels
     int atlasHeight = 0; // in pixels
-    int tileSize = 0; // in pixels
 
     Renderer *renderer = nullptr;
 
@@ -25,19 +25,12 @@ private:
 
 public:
     TextureAtlas() = default;
-    TextureAtlas(Renderer *renderer, const char *filePath, int tileSize);
+    TextureAtlas(Renderer *renderer, const char *filePath);
 
     vk::raii::Sampler &GetSampler() { return sampler; }
     vk::raii::ImageView &GetImageView() { return imageView; }
 
-    [[nodiscard]] int Cols() const;
-    [[nodiscard]] int Row() const;
-
-    struct TileUV {
-        float uMin, vMin, uMax, vMax;
-    };
-
-    [[nodiscard]] TileUV GetTileUV(int col, int row) const;
+    glm::vec2 GetUVCoordinates(int x, int y) const;
 };
 
 #endif //VOXEL_ENGINE_TEXTUREATLAS_H
