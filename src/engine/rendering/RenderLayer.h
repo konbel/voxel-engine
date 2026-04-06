@@ -14,12 +14,18 @@ struct DescriptorSetConfig {
     std::vector<vk::DescriptorSetLayoutBinding> bindings;
 };
 
+struct PipelineVariant {
+    vk::PolygonMode polygonMode;
+    vk::CullModeFlagBits cullMode;
+};
+
 struct RenderLayerConfig {
     TextureAtlas *textureAtlas = nullptr;
     std::string shaderPath;
     std::string vertexShaderEntry;
     std::string fragmentShaderEntry;
     std::vector<DescriptorSetConfig> descriptorSetConfigs;
+    std::vector<PipelineVariant> pipelineVariants;
 };
 
 class RenderLayer {
@@ -31,6 +37,7 @@ private:
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     std::vector<vk::raii::Pipeline> pipelines;
+    size_t pipelineIndex = 0;
 
     // vertex buffer data
     std::vector<vk::raii::Buffer> vertexBuffers;
@@ -67,7 +74,7 @@ private:
     void CreateDescriptorPool();
     void CreateDescriptorSets();
 
-    bool CreatePipelines();
+    bool CreatePipeline(const PipelineVariant &variant);
     bool CreateVertexBuffers();
     bool CreateIndexBuffers();
     bool CreateUniformBuffers();
@@ -95,6 +102,7 @@ public:
     void SetProjectionMatrix(const glm::mat4 &projection);
     void UploadGeometry(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
     void InvalidateGeometry();
+    void SetPipelineVariant(size_t variantIndex);
 };
 
 #endif //VOXEL_ENGINE_RENDERLAYER_H

@@ -91,10 +91,10 @@ void Engine::MainLoop() {
         constexpr float offset = 8.0f;
         uiVertices = {
             {
-                {{halfWidth - offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(0, 7)},
-                {{halfWidth + offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(7, 7)},
-                {{halfWidth + offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(7, 0)},
-                {{halfWidth - offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, uiTextureAtlas.GetUVCoordinates(0, 0)},
+                {{halfWidth - offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, guiTextureAtlas.GetUVCoordinates(0, 7)},
+                {{halfWidth + offset, halfHeight - offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, guiTextureAtlas.GetUVCoordinates(7, 7)},
+                {{halfWidth + offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, guiTextureAtlas.GetUVCoordinates(7, 0)},
+                {{halfWidth - offset, halfHeight + offset, 0.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, guiTextureAtlas.GetUVCoordinates(0, 0)},
             }
         };
 
@@ -118,18 +118,18 @@ void Engine::HandleKeyEvents(GLFWwindow *eventWindow, const int key, const int s
     engine->GetMainCamera().KeyInput(key, action);
 
     if (key == RENDER_TOGGLE_KEY && action == GLFW_PRESS) {
-        switch (engine->renderMode) {
-            case RenderMode::Fill:
-                engine->renderMode = RenderMode::Wireframe;
+        switch (engine->debugRenderMode) {
+            case DebugRenderMode::Fill:
+                engine->debugRenderMode = DebugRenderMode::Wireframe;
                 break;
-            case RenderMode::Wireframe:
-                engine->renderMode = RenderMode::WireframeNoCull;
+            case DebugRenderMode::Wireframe:
+                engine->debugRenderMode = DebugRenderMode::WireframeNoCull;
                 break;
-            case RenderMode::WireframeNoCull:
-                engine->renderMode = RenderMode::Fill;
+            case DebugRenderMode::WireframeNoCull:
+                engine->debugRenderMode = DebugRenderMode::Fill;
                 break;
         }
-        // engine->renderer.SetRenderMode(engine->renderMode);
+        engine->renderLayers[0].SetPipelineVariant(static_cast<size_t>(engine->debugRenderMode));
     }
 }
 
@@ -258,62 +258,85 @@ bool Engine::Initialize(const std::string &shaderPath) {
             Log::Error("Failed to create renderer");
         }
 
-        blockTextureAtlas = TiledTextureAtlas(&renderer, "./res/block_atlas.png", 16);
-        Block::SetTextureAtlas(&blockTextureAtlas);
+    blockTextureAtlas = TiledTextureAtlas(&renderer, "./res/block_atlas.png", 16);
+    guiTextureAtlas = TextureAtlas(&renderer, "./res/gui_atlas.png");
 
-        uiTextureAtlas = TextureAtlas(&renderer, "./res/gui_atlas.png");
+    Block::SetTextureAtlas(&blockTextureAtlas);
 
-        const RenderLayerConfig worldRenderConfig{
-            .textureAtlas = &blockTextureAtlas,
-            .shaderPath = "shader.spv",
-            .vertexShaderEntry = "vertMain",
-            .fragmentShaderEntry = "fragMain",
-            .descriptorSetConfigs = {
-                {
-                    .bindings = {
-                        vk::DescriptorSetLayoutBinding{
-                            .binding = 0,
-                            .descriptorType = vk::DescriptorType::eUniformBuffer,
-                            .descriptorCount = 1,
-                            .stageFlags = vk::ShaderStageFlagBits::eVertex,
-                        },
-                        vk::DescriptorSetLayoutBinding{
-                            .binding = 1,
-                            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-                            .descriptorCount = 1,
-                            .stageFlags = vk::ShaderStageFlagBits::eFragment,
-                        },
+    const RenderLayerConfig worldRenderConfig{
+        .textureAtlas = &blockTextureAtlas,
+        .shaderPath = "shader.spv",
+        .vertexShaderEntry = "vertMain",
+        .fragmentShaderEntry = "fragMain",
+        .descriptorSetConfigs = {
+            {
+                .bindings = {
+                    vk::DescriptorSetLayoutBinding{
+                        .binding = 0,
+                        .descriptorType = vk::DescriptorType::eUniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+                    },
+                    vk::DescriptorSetLayoutBinding{
+                        .binding = 1,
+                        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags = vk::ShaderStageFlagBits::eFragment,
                     },
                 },
             },
-        };
-        AddRenderLayer(worldRenderConfig);
-
-        const RenderLayerConfig uiRenderConfig{
-            .textureAtlas = &uiTextureAtlas,
-            .shaderPath = "shader.spv",
-            .vertexShaderEntry = "vertMain",
-            .fragmentShaderEntry = "fragMain",
-            .descriptorSetConfigs = {
+        },
+        .pipelineVariants = {
+            {
                 {
-                    .bindings = {
-                        vk::DescriptorSetLayoutBinding{
-                            .binding = 0,
-                            .descriptorType = vk::DescriptorType::eUniformBuffer,
-                            .descriptorCount = 1,
-                            .stageFlags = vk::ShaderStageFlagBits::eVertex,
-                        },
-                        vk::DescriptorSetLayoutBinding{
-                            .binding = 1,
-                            .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-                            .descriptorCount = 1,
-                            .stageFlags = vk::ShaderStageFlagBits::eFragment,
-                        }
+                    .polygonMode = vk::PolygonMode::eFill,
+                    .cullMode = vk::CullModeFlagBits::eBack,
+                },
+                {
+                    .polygonMode = vk::PolygonMode::eLine,
+                    .cullMode = vk::CullModeFlagBits::eBack,
+                },
+                {
+                    .polygonMode = vk::PolygonMode::eLine,
+                    .cullMode = vk::CullModeFlagBits::eNone,
+                },
+            }
+        },
+    };
+    AddRenderLayer(worldRenderConfig);
+
+    const RenderLayerConfig uiRenderConfig{
+        .textureAtlas = &guiTextureAtlas,
+        .shaderPath = "shader.spv",
+        .vertexShaderEntry = "vertMain",
+        .fragmentShaderEntry = "fragMain",
+        .descriptorSetConfigs = {
+            {
+                .bindings = {
+                    vk::DescriptorSetLayoutBinding{
+                        .binding = 0,
+                        .descriptorType = vk::DescriptorType::eUniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+                    },
+                    vk::DescriptorSetLayoutBinding{
+                        .binding = 1,
+                        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                        .descriptorCount = 1,
+                        .stageFlags = vk::ShaderStageFlagBits::eFragment,
                     }
                 }
             }
-        };
-        AddRenderLayer(uiRenderConfig);
+        },
+        .pipelineVariants = {
+            {
+                .polygonMode = vk::PolygonMode::eFill,
+                .cullMode = vk::CullModeFlagBits::eBack,
+            },
+        },
+    };
+    AddRenderLayer(uiRenderConfig);
+
 
         glfwShowWindow(window);
         initialized = true;

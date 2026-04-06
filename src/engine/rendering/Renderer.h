@@ -18,12 +18,6 @@ import vulkan_hpp;
 
 class TiledTextureAtlas;
 
-enum class RenderMode {
-    Fill,
-    Wireframe,
-    WireframeNoCull,
-};
-
 class Renderer {
     friend class RenderLayer;
 

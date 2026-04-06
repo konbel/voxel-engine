@@ -8,6 +8,12 @@
 #include "Camera.h"
 #include "rendering/texture/TiledTextureAtlas.h"
 
+enum class DebugRenderMode {
+    Fill,
+    Wireframe,
+    WireframeNoCull,
+};
+
 class Engine {
 private:
     static constexpr int CHUNK_SIZE = 16;
@@ -23,14 +29,14 @@ private:
     Camera mainCamera;
 
     bool blocksChanged = true;
-    RenderMode renderMode = RenderMode::Fill;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
     TiledTextureAtlas blockTextureAtlas;
-    TextureAtlas uiTextureAtlas;
+    TextureAtlas guiTextureAtlas;
 
     std::vector<RenderLayer> renderLayers;
+    DebugRenderMode debugRenderMode = DebugRenderMode::Fill;
 
     glm::mat4 perspectiveMatrix = glm::mat4(1.0f);
     glm::mat4 orthogonalMatrix = glm::mat4(1.0f);

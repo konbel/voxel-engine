@@ -131,7 +131,7 @@ void RenderLayer::CreateDescriptorSets() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-bool RenderLayer::CreatePipelines() {
+bool RenderLayer::CreatePipeline(const PipelineVariant &variant) {
     const vk::raii::ShaderModule shaderModule = renderer->CreateShaderModule(
         ReadFile(std::format("{}/{}", renderer->shaderPath, config.shaderPath)));
 
@@ -180,8 +180,8 @@ bool RenderLayer::CreatePipelines() {
     vk::PipelineRasterizationStateCreateInfo rasterizationStateCreateInfo{
         .depthClampEnable = vk::False,
         .rasterizerDiscardEnable = vk::False,
-        .polygonMode = vk::PolygonMode::eFill,
-        .cullMode = vk::CullModeFlagBits::eBack,
+        .polygonMode = variant.polygonMode,
+        .cullMode = variant.cullMode,
         .frontFace = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable = vk::False,
         .depthBiasSlopeFactor = 1.0f,
@@ -377,7 +377,14 @@ RenderLayer::RenderLayer(const Renderer *renderer, const RenderLayerConfig &conf
     CreateDescriptorPool();
     CreateDescriptorSets();
 
-    CreatePipelines();
+    if (config.pipelineVariants.empty()) {
+        Log::Warning("No pipeline variants specified for a render layer, skipping pipeline creation");
+        return;
+    }
+
+    for (const auto &variant: config.pipelineVariants) {
+        CreatePipeline(variant);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -395,7 +402,7 @@ void RenderLayer::Render() const {
 
     UpdateUniformBuffer(frameIndex);
 
-    commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines[0]);
+    commandBuffers[frameIndex].bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines[pipelineIndex]);
 
     commandBuffers[frameIndex].setViewport(0, vk::Viewport{
                                                0.0f, 0.0f, static_cast<float>(swapChainExtent.width),
@@ -463,4 +470,9 @@ void RenderLayer::InvalidateGeometry() {
         vertexBufferOutdated[i] = true;
         indexBufferOutdated[i] = true;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void RenderLayer::SetPipelineVariant(size_t variantIndex) {
+    pipelineIndex = variantIndex;
 }
